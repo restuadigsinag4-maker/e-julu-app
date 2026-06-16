@@ -293,25 +293,29 @@ function App() {
   const updateGuruForm = (k, v) => setGuruForm(p => ({ ...p, [k]: v }));
 
   // ── Registrasi Siswa ───────────────────────────────────────────
+  // ── Registrasi Siswa (Versi Opsional) ───────────────────────────
   const registrasiSiswa = async () => {
     const f = siswaForm;
+    // Validasi hanya untuk teks, tidak mengecek foto sama sekali
     if(!f.nisn||!f.nama||!f.tglLahir||!f.email||!f.telpon||!f.agama||
        !f.password||!f.konfirmasi||!f.kelas||!f.jurusan||!f.citaCita||!f.hobby||!f.bio) {
       setSiswaError('Semua field wajib diisi!'); return;
     }
     if(f.password !== f.konfirmasi) { setSiswaError('Password tidak cocok!'); return; }
     if(f.password.length < 6) { setSiswaError('Password minimal 6 karakter!'); return; }
+    
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, f.email, f.password);
-      let fotoUrl = '';
+      // Foto dipaksa kosong dan tidak dicek apakah sudah diambil atau belum
+      const fotoUrl = fotoDataUrl || ''; 
       
       await setDoc(doc(db, 'users', cred.user.uid), {
         uid: cred.user.uid, role: 'siswa', status: 'pending',
         nisn: f.nisn, nama: f.nama, tglLahir: f.tglLahir,
         email: f.email, telpon: f.telpon, agama: f.agama,
         kelas: f.kelas, jurusan: f.jurusan, citaCita: f.citaCita,
-        hobby: f.hobby, bio: f.bio, fotoUrl,
+        hobby: f.hobby, bio: f.bio, fotoUrl: fotoUrl,
         poinPG: 0, poinEssay: 0, poinModul: 0,
         pelanggaran: 0, createdAt: new Date()
       });
