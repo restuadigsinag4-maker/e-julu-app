@@ -104,6 +104,18 @@ function App() {
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [appSettings, setAppSettings] = useState({ namaSekolah: 'SMA NEGERI 1 LUMBANJULU', tagline: 'E-Learning', welcomeText: 'Selamat Datang di E-Julu!' });
 
+  // ── PENGATURAN STATE ──────────────────────────────────────────
+  const [pengaturanMsg, setPengaturanMsg] = useState('');
+  const [editBioForm, setEditBioForm] = useState({ bio: '', citaCita: '', hobby: '' });
+  const [gantiPwForm, setGantiPwForm] = useState({ baru: '', konfirmasi: '' });
+  const [showGantiPw, setShowGantiPw] = useState(false);
+  const [showKonfirmasiPw, setShowKonfirmasiPw] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState('');
+
+  // ── ABOUT STATE ───────────────────────────────────────────────
+  const [aboutData, setAboutData] = useState({ namaSekolah: 'SMA NEGERI 1 LUMBANJULU', namaKepsek: '', jabatanKepsek: 'Kepala Sekolah', tentang: '', visi: '', misi: '', fotoSekolah: '', fotoKepsek: '' });
+  const [aboutLoaded, setAboutLoaded] = useState(false);
+
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
   const mapelList = [
@@ -558,6 +570,53 @@ function App() {
   const simpanAppSettings = async () => {
     await setDoc(doc(db, 'settings', 'app'), appSettings);
     setAdminMsg('✅ Pengaturan aplikasi tersimpan!');
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // ── PENGATURAN FUNCTIONS ─────────────────────────────────────
+  const simpanEditProfil = async () => {
+    if (!userData) return;
+    const updateData = {};
+    if (editBioForm.bio.trim()) updateData.bio = editBioForm.bio.trim();
+    if (editBioForm.citaCita.trim()) updateData.citaCita = editBioForm.citaCita.trim();
+    if (editBioForm.hobby.trim()) updateData.hobby = editBioForm.hobby.trim();
+    if (selectedAvatar) updateData.avatar = selectedAvatar;
+    if (Object.keys(updateData).length === 0) { setPengaturanMsg('Tidak ada perubahan.'); return; }
+    try {
+      await updateDoc(doc(db, 'users', userData.uid), updateData);
+      setUserData(prev => ({ ...prev, ...updateData }));
+      setPengaturanMsg('✅ Profil berhasil diperbarui!');
+    } catch (e) { setPengaturanMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setPengaturanMsg(''), 3000);
+  };
+
+  const gantiPassword = async () => {
+    if (!gantiPwForm.baru || !gantiPwForm.konfirmasi) { setPengaturanMsg('Isi semua field password!'); return; }
+    if (gantiPwForm.baru.length < 6) { setPengaturanMsg('Password minimal 6 karakter!'); return; }
+    if (gantiPwForm.baru !== gantiPwForm.konfirmasi) { setPengaturanMsg('Password tidak cocok!'); return; }
+    try {
+      await sendPasswordResetEmail(auth, userData.email);
+      setPengaturanMsg('📧 Link ganti password dikirim ke email kamu!');
+      setGantiPwForm({ baru: '', konfirmasi: '' });
+    } catch (e) { setPengaturanMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setPengaturanMsg(''), 4000);
+  };
+
+  // ── ABOUT FUNCTIONS ───────────────────────────────────────────
+  const loadAbout = async () => {
+    if (aboutLoaded) return;
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'about'));
+      if (snap.exists()) setAboutData(prev => ({ ...prev, ...snap.data() }));
+      setAboutLoaded(true);
+    } catch (e) { console.error(e); }
+  };
+
+  const simpanAbout = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'about'), aboutData);
+      setAdminMsg('✅ Halaman Tentang berhasil disimpan!');
+    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setTimeout(() => setAdminMsg(''), 3000);
   };
 
@@ -1098,6 +1157,13 @@ function App() {
           📊 Lihat Statistik
         </button>
       </div>
+      <div style={{ ...S.card, border: '1px solid rgba(255,180,0,0.2)' }}>
+        <p style={{ color: '#ffd700', fontWeight: '700', marginBottom: '8px', fontSize: '14px' }}>🏫 Halaman Tentang Sekolah</p>
+        <p style={{ color: 'rgba(180,200,255,0.45)', fontSize: '12px', marginBottom: '12px' }}>Edit foto sekolah, visi misi, dan info kepsek</p>
+        <button onClick={() => { loadAbout(); setPage('adminEditAbout'); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,rgba(140,90,0,0.7),rgba(90,50,0,0.9))', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+          ✏️ Edit Halaman Tentang
+        </button>
+      </div>
       <div style={{ ...S.card, border: '1px solid #f39c12' }}>
         <p style={{ color: '#f39c12', fontWeight: 'bold', marginBottom: '8px' }}>🔐 Info Kredensial Admin</p>
         <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '13px', margin: '0 0 4px' }}>Email: <strong style={{ color: 'white' }}>{ADMIN_EMAIL}</strong></p>
@@ -1227,11 +1293,11 @@ function App() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
+            <div onClick={() => { setEditBioForm({ bio: userData?.bio||'', citaCita: userData?.citaCita||'', hobby: userData?.hobby||'' }); setSelectedAvatar(userData?.avatar||''); setPengaturanMsg(''); setPage('pengaturan'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
               <div style={{ fontSize: '16px' }}>⚙️</div>
               <div style={{ fontSize: '8px', color: 'rgba(130,200,255,0.5)' }}>Setelan</div>
             </div>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
+            <div onClick={() => { loadAbout(); setPage('about'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
               <div style={{ fontSize: '16px' }}>ℹ️</div>
               <div style={{ fontSize: '8px', color: 'rgba(130,200,255,0.5)' }}>Tentang</div>
             </div>
@@ -2091,6 +2157,197 @@ function App() {
       </div>
     </div>
   );
+
+  // ══════════════════════════════════════════════════════════════════
+  // PENGATURAN
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'pengaturan') {
+    const avatarSiswaLaki = ['👦','🧑','👱','🧔','👮','🧑‍💻','🧑‍🎓','🧑‍🔬','🧑‍🎨','🦸'];
+    const avatarSiswaPerempuan = ['👧','👩','👩‍🦰','👩‍🦱','👩‍🦳','👩‍💻','👩‍🎓','👩‍🔬','👩‍🎨','🦸‍♀️'];
+    const avatarGuru = ['👨‍🏫','👩‍🏫','🧑‍🏫','👨‍💼','👩‍💼','🧑‍💼','👨‍🎓','👩‍🎓','🧑‍🎓','👨‍⚕️'];
+    const avatarList = userRole === 'guru' ? avatarGuru : (userData?.jenis === 'perempuan' ? avatarSiswaPerempuan : [...avatarSiswaLaki, ...avatarSiswaPerempuan]);
+    const currentAvatar = selectedAvatar || userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓');
+
+    return (
+      <div style={S.page}>
+        <TopBar />
+        <BackBtn to="dashboard" />
+        <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px', letterSpacing: '0.5px' }}>⚙️ Pengaturan</p>
+        <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>KELOLA AKUN KAMU</p>
+
+        {pengaturanMsg && <div style={pengaturanMsg.startsWith('✅') || pengaturanMsg.startsWith('📧') ? S.successBox : S.errBox}>{pengaturanMsg}</div>}
+
+        {/* Avatar */}
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.15)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>🖼️ Pilih Avatar</p>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,200,0.4),rgba(0,50,140,0.6))', border: '2px solid rgba(0,200,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', boxShadow: '0 6px 20px rgba(0,100,200,0.3)' }}>
+              {currentAvatar}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '8px' }}>
+            {avatarList.map((av, i) => (
+              <button key={i} onClick={() => setSelectedAvatar(av)}
+                style={{ padding: '10px', borderRadius: '12px', border: selectedAvatar === av ? '2px solid #00c8ff' : '1px solid rgba(0,200,255,0.1)', background: selectedAvatar === av ? 'rgba(0,200,255,0.15)' : 'rgba(255,255,255,0.03)', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {av}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Edit Profil */}
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.15)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>✏️ Edit Profil</p>
+          {userRole === 'siswa' && (
+            <>
+              <label style={S.label}>Cita-cita</label>
+              <input style={S.input} placeholder="Cita-citamu..." value={editBioForm.citaCita} onChange={e => setEditBioForm(p => ({ ...p, citaCita: e.target.value }))} />
+              <label style={S.label}>Hobby</label>
+              <input style={S.input} placeholder="Hobi kamu..." value={editBioForm.hobby} onChange={e => setEditBioForm(p => ({ ...p, hobby: e.target.value }))} />
+            </>
+          )}
+          <label style={S.label}>Bio Singkat</label>
+          <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Ceritakan tentang dirimu..." value={editBioForm.bio} onChange={e => setEditBioForm(p => ({ ...p, bio: e.target.value }))} />
+          <button onClick={simpanEditProfil} style={{ ...S.btnOrange, marginTop: '4px', padding: '13px', fontSize: '14px' }}>
+            💾 Simpan Perubahan
+          </button>
+        </div>
+
+        {/* Info Akun */}
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.1)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>📋 Info Akun</p>
+          <div style={{ fontSize: '13px', color: 'rgba(180,210,255,0.65)', lineHeight: '2' }}>
+            <p style={{ margin: 0 }}>📧 Email: <span style={{ color: 'white' }}>{userData?.email}</span></p>
+            {userRole === 'siswa' && <p style={{ margin: 0 }}>🎓 NISN: <span style={{ color: 'white' }}>{userData?.nisn}</span></p>}
+            {userRole === 'guru' && userData?.nip && <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: 'white' }}>{userData?.nip}</span></p>}
+            {userRole === 'guru' && userData?.nik && <p style={{ margin: 0 }}>🪪 NIK: <span style={{ color: 'white' }}>{userData?.nik}</span></p>}
+          </div>
+        </div>
+
+        {/* Ganti Password */}
+        <div style={{ ...S.card, border: '1px solid rgba(150,0,255,0.2)' }}>
+          <p style={{ color: '#aa66ff', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>🔑 Ganti Password</p>
+          <p style={{ color: 'rgba(180,150,255,0.6)', fontSize: '12px', marginBottom: '12px', lineHeight: '1.6' }}>
+            Link ganti password akan dikirim ke:<br />
+            <strong style={{ color: 'rgba(200,180,255,0.9)' }}>{userData?.email}</strong>
+          </p>
+          <button onClick={gantiPassword} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,rgba(120,0,200,0.6),rgba(80,0,150,0.8))', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+            📧 Kirim Link Reset Password
+          </button>
+        </div>
+
+        {/* Logout */}
+        <button onClick={logout} style={{ width: '100%', padding: '12px', background: 'rgba(255,50,50,0.07)', border: '1px solid rgba(255,70,70,0.18)', color: 'rgba(255,110,110,0.75)', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', marginTop: '4px' }}>
+          🚪 Keluar / Logout
+        </button>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ABOUT (TENTANG)
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'about') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="dashboard" />
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px', letterSpacing: '0.5px' }}>ℹ️ Tentang</p>
+      <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>PROFIL SEKOLAH</p>
+
+      {/* Foto & Nama Sekolah */}
+      <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,50,120,0.4),rgba(0,30,80,0.6))', border: '1px solid rgba(0,200,255,0.15)', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', backdropFilter: 'blur(10px)' }}>
+        {aboutData.fotoSekolah
+          ? <img src={aboutData.fotoSekolah} alt="Sekolah" style={{ width: '100%', borderRadius: '12px', marginBottom: '16px', maxHeight: '180px', objectFit: 'cover' }} />
+          : <div style={{ width: '100%', height: '120px', borderRadius: '12px', background: 'rgba(0,100,200,0.1)', border: '1px dashed rgba(0,200,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', fontSize: '40px' }}>🏫</div>
+        }
+        <img src="/logo_sekolah.png" alt="Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '50%', marginBottom: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }} />
+        <p style={{ color: 'white', fontSize: '17px', fontWeight: '900', margin: '0 0 4px', letterSpacing: '0.5px' }}>{aboutData.namaSekolah || 'SMA NEGERI 1 LUMBANJULU'}</p>
+        <p style={{ color: 'rgba(0,200,255,0.7)', fontSize: '12px', margin: '0 0 8px', letterSpacing: '1px' }}>Kabupaten Toba · Sumatera Utara</p>
+        {aboutData.tentang && <p style={{ color: 'rgba(180,210,255,0.65)', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.tentang}</p>}
+      </div>
+
+      {/* Visi Misi */}
+      {(aboutData.visi || aboutData.misi) && (
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.12)' }}>
+          {aboutData.visi && (
+            <div style={{ marginBottom: aboutData.misi ? '14px' : 0 }}>
+              <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '13px', marginBottom: '6px', letterSpacing: '1px' }}>🎯 VISI</p>
+              <p style={{ color: 'rgba(180,210,255,0.7)', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.visi}</p>
+            </div>
+          )}
+          {aboutData.misi && (
+            <div>
+              <p style={{ color: '#ffd700', fontWeight: '700', fontSize: '13px', marginBottom: '6px', letterSpacing: '1px' }}>📌 MISI</p>
+              <p style={{ color: 'rgba(180,210,255,0.7)', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.misi}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Kepala Sekolah */}
+      {(aboutData.namaKepsek || aboutData.fotoKepsek) && (
+        <div style={{ ...S.card, border: '1px solid rgba(255,210,0,0.15)', textAlign: 'center' }}>
+          <p style={{ color: '#ffd700', fontWeight: '700', fontSize: '13px', marginBottom: '14px', letterSpacing: '1px' }}>👤 KEPALA SEKOLAH</p>
+          {aboutData.fotoKepsek
+            ? <img src={aboutData.fotoKepsek} alt="Kepsek" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '50%', marginBottom: '10px', border: '2px solid rgba(255,210,0,0.3)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }} />
+            : <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,130,0,0.3),rgba(150,80,0,0.5))', border: '2px solid rgba(255,210,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', margin: '0 auto 10px' }}>👤</div>
+          }
+          <p style={{ color: 'white', fontWeight: '800', fontSize: '15px', margin: '0 0 4px' }}>{aboutData.namaKepsek}</p>
+          <p style={{ color: 'rgba(255,210,0,0.6)', fontSize: '12px', margin: 0, letterSpacing: '1px' }}>{aboutData.jabatanKepsek || 'Kepala Sekolah'}</p>
+        </div>
+      )}
+
+      {/* E-JULU credit */}
+      <div style={{ textAlign: 'center', marginTop: '8px', padding: '16px' }}>
+        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg,#0055cc,#0099ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', margin: '0 auto 8px', boxShadow: '0 4px 14px rgba(0,130,255,0.3)' }}>📚</div>
+        <p style={{ color: 'rgba(150,200,255,0.4)', fontSize: '11px', margin: '0 0 2px', letterSpacing: '1px' }}>POWERED BY</p>
+        <p style={{ color: 'rgba(0,200,255,0.6)', fontSize: '14px', fontWeight: '900', margin: '0 0 4px', letterSpacing: '2px' }}>E-JULU</p>
+        <p style={{ color: 'rgba(150,200,255,0.35)', fontSize: '11px', margin: 0 }}>Dev by Restuadi G. Sinaga, S.Kom</p>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // ABOUT EDIT (ADMIN)
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'adminEditAbout') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="adminSettings" fn={() => setPage('adminSettings')} />
+      {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🏫 Edit Halaman Tentang</p>
+      <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>KONTEN PROFIL SEKOLAH</p>
+
+      <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.15)', width: '100%' }}>
+        <p style={{ color: '#00c8ff', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>🏫 Info Sekolah</p>
+        <label style={S.label}>Nama Sekolah</label>
+        <input style={S.input} value={aboutData.namaSekolah} onChange={e => setAboutData(p => ({ ...p, namaSekolah: e.target.value }))} />
+        <label style={S.label}>URL Foto Sekolah (Google Drive/link)</label>
+        <input style={S.input} placeholder="https://..." value={aboutData.fotoSekolah} onChange={e => setAboutData(p => ({ ...p, fotoSekolah: e.target.value }))} />
+        <label style={S.label}>Tentang Sekolah</label>
+        <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Deskripsi singkat tentang sekolah..." value={aboutData.tentang} onChange={e => setAboutData(p => ({ ...p, tentang: e.target.value }))} />
+        <label style={S.label}>Visi</label>
+        <textarea style={{ ...S.input, height: '70px', resize: 'none' }} placeholder="Visi sekolah..." value={aboutData.visi} onChange={e => setAboutData(p => ({ ...p, visi: e.target.value }))} />
+        <label style={S.label}>Misi</label>
+        <textarea style={{ ...S.input, height: '70px', resize: 'none' }} placeholder="Misi sekolah..." value={aboutData.misi} onChange={e => setAboutData(p => ({ ...p, misi: e.target.value }))} />
+      </div>
+
+      <div style={{ ...S.card, border: '1px solid rgba(255,210,0,0.2)', width: '100%' }}>
+        <p style={{ color: '#ffd700', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>👤 Kepala Sekolah</p>
+        <label style={S.label}>Nama Kepala Sekolah</label>
+        <input style={S.input} placeholder="Nama lengkap..." value={aboutData.namaKepsek} onChange={e => setAboutData(p => ({ ...p, namaKepsek: e.target.value }))} />
+        <label style={S.label}>Jabatan</label>
+        <input style={S.input} placeholder="Kepala Sekolah" value={aboutData.jabatanKepsek} onChange={e => setAboutData(p => ({ ...p, jabatanKepsek: e.target.value }))} />
+        <label style={S.label}>URL Foto Kepala Sekolah</label>
+        <input style={S.input} placeholder="https://..." value={aboutData.fotoKepsek} onChange={e => setAboutData(p => ({ ...p, fotoKepsek: e.target.value }))} />
+      </div>
+
+      <button onClick={simpanAbout} style={{ ...S.btnOrange, fontSize: '15px', padding: '14px' }}>
+        💾 Simpan Halaman Tentang
+      </button>
+    </div>
+  );
+
 }
 
 export default App;
