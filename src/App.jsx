@@ -4,12 +4,17 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, collection,
   getDocs, updateDoc, addDoc, deleteDoc, query, where
 } from 'firebase/firestore';
+
+// ── ADMIN CREDENTIALS ─────────────────────────────────────────
+const ADMIN_EMAIL = 'admin@ejulu.com';
+const ADMIN_PASSWORD = 'admin123';
 
 function App() {
   const [page, setPage] = useState('splash');
@@ -24,6 +29,8 @@ function App() {
 
   const [selectedMapel, setSelectedMapel] = useState(null);
   const [selectedBab, setSelectedBab] = useState(null);
+  const [selectedKelas, setSelectedKelas] = useState(null); // { tingkat: '10', jurusan: 'A' } untuk guru, atau dari userData siswa
+  const [guruPilihTingkat, setGuruPilihTingkat] = useState(null); // '10'/'11'/'12'
 
   const [siswaLoginNISN, setSiswaLoginNISN] = useState('');
   const [siswaLoginPassword, setSiswaLoginPassword] = useState('');
@@ -83,6 +90,19 @@ function App() {
   const [essayBaru, setEssayBaru] = useState('');
   const [nilaiEssayInput, setNilaiEssayInput] = useState({});
   const [lihatTab, setLihatTab] = useState('pg');
+
+  // ── ADMIN STATE ───────────────────────────────────────────────
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [adminTab, setAdminTab] = useState('pending');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [editPoinForm, setEditPoinForm] = useState({});
+  const [adminMsg, setAdminMsg] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [appSettings, setAppSettings] = useState({ namaSekolah: 'SMA NEGERI 1 LUMBANJULU', tagline: 'E-Learning', welcomeText: 'Selamat Datang di E-Julu!' });
 
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
@@ -193,16 +213,24 @@ function App() {
     setBabList(list);
   };
 
-  // ── Load soal quiz dari Firestore ──────────────────────────────
+  // Load soal quiz dari Firestore
   const loadSoal = async (babId) => {
     const q = query(collection(db, 'soal'), where('babId', '==', babId));
     const snap = await getDocs(q);
     setQuizSoalList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
-  // ── Load hasil siswa ───────────────────────────────────────────
-  const loadHasilSiswa = async (babId) => {
-    const q = query(collection(db, 'hasilQuiz'), where('babId', '==', babId));
+  // Load hasil siswa — filter by babId AND kelas+jurusan untuk guru
+  const loadHasilSiswa = async (babId, filterKelas) => {
+    let q;
+    if (filterKelas) {
+      // guru lihat hasil spesifik kelas misal "10A"
+      q = query(collection(db, 'hasilQuiz'),
+        where('babId', '==', babId),
+        where('siswaKelas', '==', filterKelas));
+    } else {
+      q = query(collection(db, 'hasilQuiz'), where('babId', '==', babId));
+    }
     const snap = await getDocs(q);
     setHasilSiswa(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
@@ -258,7 +286,7 @@ function App() {
         mapel: selectedMapel.nama,
         siswaId: userData.uid,
         siswaNama: userData.nama,
-        siswaKelas: `${userData.kelas}-${userData.jurusan}`,
+        siswaKelas: `${userData.kelas}${userData.jurusan}`,
         poinPG,
         essayJawaban,
         nilaiEssay: null,
@@ -450,6 +478,89 @@ function App() {
     setLoading(false);
   };
 
+  // ── ADMIN FUNCTIONS ───────────────────────────────────────────
+  const loginAdmin = () => {
+    if (adminEmail === ADMIN_EMAIL && adminPassword === ADMIN_PASSWORD) {
+      setAdminError('');
+      loadAdminUsers('pending');
+      setAdminTab('pending');
+      setPage('adminDashboard');
+    } else {
+      setAdminError('Email atau password admin salah!');
+    }
+  };
+
+  const loadAdminUsers = async (status) => {
+    setAdminLoading(true);
+    try {
+      let snap;
+      if (status === 'all' || status === 'approved') {
+        snap = status === 'all'
+          ? await getDocs(collection(db, 'users'))
+          : await getDocs(query(collection(db, 'users'), where('status', '==', 'approved')));
+      } else {
+        snap = await getDocs(query(collection(db, 'users'), where('status', '==', status)));
+      }
+      setAdminUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error(e); }
+    setAdminLoading(false);
+  };
+
+  const approveUser = async (uid) => {
+    await updateDoc(doc(db, 'users', uid), { status: 'approved' });
+    setAdminMsg('✅ Akun berhasil disetujui!');
+    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const rejectUser = async (uid) => {
+    await updateDoc(doc(db, 'users', uid), { status: 'rejected' });
+    setAdminMsg('❌ Akun berhasil ditolak!');
+    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const hapusUser = async (uid) => {
+    if (!window.confirm('Yakin hapus user ini dari sistem?')) return;
+    await deleteDoc(doc(db, 'users', uid));
+    setAdminMsg('🗑️ User berhasil dihapus!');
+    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+    setSelectedUser(null);
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const simpanEditPoin = async (uid) => {
+    const p = editPoinForm;
+    const updateData = {};
+    if (p.poinPG !== undefined) updateData.poinPG = Number(p.poinPG);
+    if (p.poinEssay !== undefined) updateData.poinEssay = Number(p.poinEssay);
+    if (p.poinModul !== undefined) updateData.poinModul = Number(p.poinModul);
+    if (p.poinUpload !== undefined) updateData.poinUpload = Number(p.poinUpload);
+    if (p.poinNilai !== undefined) updateData.poinNilai = Number(p.poinNilai);
+    if (p.pelanggaran !== undefined) updateData.pelanggaran = Number(p.pelanggaran);
+    await updateDoc(doc(db, 'users', uid), updateData);
+    setAdminMsg('✅ Poin berhasil diperbarui!');
+    setAdminUsers(prev => prev.map(u => u.uid === uid ? { ...u, ...updateData } : u));
+    setSelectedUser(prev => ({ ...prev, ...updateData }));
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const resetPassword = async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setAdminMsg('📧 Email reset password terkirim ke ' + email);
+    } catch (e) {
+      setAdminMsg('❌ Gagal kirim email: ' + e.message);
+    }
+    setTimeout(() => setAdminMsg(''), 4000);
+  };
+
+  const simpanAppSettings = async () => {
+    await setDoc(doc(db, 'settings', 'app'), appSettings);
+    setAdminMsg('✅ Pengaturan aplikasi tersimpan!');
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
   // ── Logout ─────────────────────────────────────────────────────
   const logout = async () => {
     await signOut(auth);
@@ -585,11 +696,8 @@ function App() {
       position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-60%)',
       background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '16px',
     },
-    errBox: {
-      background: 'rgba(231,76,60,0.2)', border: '1px solid #e74c3c',
-      borderRadius: '8px', padding: '10px 14px',
-      color: '#ff6b6b', fontSize: '13px', marginBottom: '12px', width: '100%',
-    },
+    errBox: { background: 'rgba(231,76,60,0.2)', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', color: '#ff6b6b', fontSize: '13px', marginBottom: '12px', width: '100%' },
+    successBox: { background: 'rgba(39,174,96,0.2)', border: '1px solid #27ae60', borderRadius: '8px', padding: '10px 14px', color: '#2ecc71', fontSize: '13px', marginBottom: '12px', width: '100%' },
     card: {
       background: 'rgba(255,255,255,0.07)', borderRadius: '12px',
       padding: '16px', width: '100%', marginBottom: '12px',
@@ -711,11 +819,260 @@ function App() {
       <p style={{ fontSize: '18px', textAlign: 'center', margin: '20px 0 28px', lineHeight: '1.7' }}>
         Untuk melanjutkan<br />apakah anda sebagai:
       </p>
-      <div style={{ display: 'flex', gap: '16px', width: '100%', marginBottom: '40px' }}>
+      <div style={{ display: 'flex', gap: '16px', width: '100%', marginBottom: '16px' }}>
         <button onClick={() => setPage('menuGuru')} style={{ ...S.btnBlue, color: '#00e5ff' }}>GURU</button>
         <button onClick={() => setPage('menuSiswa')} style={{ ...S.btnBlue, color: '#f0e000' }}>SISWA</button>
       </div>
+      <button onClick={() => { setAdminEmail(''); setAdminPassword(''); setAdminError(''); setPage('loginAdmin'); }}
+        style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #555', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', marginBottom: '20px' }}>
+        🔐 LOGIN ADMIN
+      </button>
       <img src="/robot.png" alt="Robot" style={{ height: '190px', alignSelf: 'flex-start' }} />
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // LOGIN ADMIN
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'loginAdmin') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="role" />
+      <div style={{ fontSize: '48px', marginBottom: '8px' }}>🔐</div>
+      <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', marginBottom: '4px' }}>LOGIN ADMIN</p>
+      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '24px' }}>Akses khusus administrator</p>
+      {adminError && <div style={S.errBox}>⚠️ {adminError}</div>}
+      <div style={{ width: '100%' }}>
+        <label style={S.label}>Email Admin:</label>
+        <input style={S.input} type="email" placeholder="admin@ejulu.com" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} />
+        <label style={S.label}>Password Admin:</label>
+        <div style={S.pwWrap}>
+          <input style={{ ...S.input, paddingRight: '40px' }} type={showAdminPassword ? 'text' : 'password'} placeholder="••••••••" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} />
+          <button style={S.eyeBtn} onClick={() => setShowAdminPassword(!showAdminPassword)}>{showAdminPassword ? '🙈' : '👁️'}</button>
+        </div>
+        <button style={{ ...S.btnOrange, marginTop: '16px' }} onClick={loginAdmin}>🔐 Masuk sebagai Admin</button>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // ADMIN DASHBOARD
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'adminDashboard') return (
+    <div style={S.page}>
+      <TopBar />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '16px' }}>
+        <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', margin: 0 }}>🛡️ PANEL ADMIN</p>
+        <button onClick={() => setPage('role')} style={{ background: 'none', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer', fontSize: '13px' }}>🚪 Keluar</button>
+      </div>
+      {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', width: '100%', marginBottom: '16px' }}>
+        {[
+          { key: 'pending',  label: '⏳ Pending',  warna: '#f39c12' },
+          { key: 'all',      label: '👥 Semua',    warna: '#2980b9' },
+          { key: 'poin',     label: '🏆 Poin',     warna: '#8e44ad' },
+          { key: 'settings', label: '⚙️ Aplikasi', warna: '#1e8449' },
+        ].map(t => (
+          <button key={t.key} onClick={() => {
+            setAdminTab(t.key);
+            if (t.key === 'settings') { setPage('adminSettings'); return; }
+            loadAdminUsers(t.key === 'poin' ? 'approved' : t.key);
+          }} style={{ padding: '10px 4px', borderRadius: '8px', border: 'none', fontSize: '11px', background: adminTab === t.key ? t.warna : 'rgba(255,255,255,0.08)', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {adminLoading && <LoadingSpinner />}
+
+      {adminTab === 'pending' && !adminLoading && (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#f39c12', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>⏳ Menunggu Persetujuan ({adminUsers.length})</p>
+          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#aaa' }}>Tidak ada pendaftaran baru.</p></div>}
+          {adminUsers.map((u, i) => (
+            <div key={i} style={{ ...S.card, border: '1px solid #f39c12' }}>
+              <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '15px' }}>{u.nama}</p>
+              <p style={{ color: u.role === 'siswa' ? '#f0e000' : '#4fc3f7', fontSize: '12px', margin: '0 0 2px' }}>
+                {u.role === 'siswa' ? `🎓 Siswa — Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 Guru — ${u.mapel}`}
+              </p>
+              <p style={{ color: '#aaa', fontSize: '12px', margin: '0 0 2px' }}>{u.email}</p>
+              <p style={{ color: '#aaa', fontSize: '11px', margin: '0 0 6px' }}>{u.role === 'siswa' ? `NISN: ${u.nisn} | Agama: ${u.agama}` : `NIP/NIK: ${u.nip || u.nik} | Jabatan: ${u.jabatan}`}</p>
+              <p style={{ color: '#ccc', fontSize: '12px', margin: '0 0 10px' }}>📝 {u.bio}</p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => approveUser(u.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>✅ Setujui</button>
+                <button onClick={() => rejectUser(u.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>❌ Tolak</button>
+                <button onClick={() => hapusUser(u.uid)} style={{ padding: '10px 14px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adminTab === 'all' && !adminLoading && (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>👥 Semua User ({adminUsers.length})</p>
+          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#aaa' }}>Belum ada user.</p></div>}
+          {adminUsers.map((u, i) => (
+            <div key={i} style={{ ...S.card, border: `1px solid ${u.status === 'approved' ? '#27ae60' : u.status === 'pending' ? '#f39c12' : '#e74c3c'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '14px' }}>{u.nama}</p>
+                  <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}>{u.role === 'siswa' ? `🎓 Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 ${u.mapel}`}</p>
+                  <p style={{ color: '#aaa', fontSize: '11px', margin: '2px 0 0' }}>{u.email}</p>
+                </div>
+                <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '20px', background: u.status === 'approved' ? '#1e8449' : u.status === 'pending' ? '#b7860b' : '#922b21', color: 'white', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  {u.status === 'approved' ? '✅ Aktif' : u.status === 'pending' ? '⏳ Pending' : '❌ Ditolak'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                <button onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); setPage('adminDetailUser'); }}
+                  style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>👁️ Detail</button>
+                <button onClick={() => resetPassword(u.email)}
+                  style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#8e44ad', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🔑 Reset PW</button>
+                <button onClick={() => hapusUser(u.uid)}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#c0392b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🗑️</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adminTab === 'poin' && !adminLoading && (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#8e44ad', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>🏆 Edit Poin ({adminUsers.length} user aktif)</p>
+          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#aaa' }}>Belum ada user aktif.</p></div>}
+          {adminUsers.map((u, i) => (
+            <div key={i} style={{ ...S.card, border: '1px solid #8e44ad', cursor: 'pointer' }}
+              onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); setPage('adminDetailUser'); }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '14px' }}>{u.nama}</p>
+                  <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}>{u.role === 'siswa' ? `🎓 Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 ${u.mapel}`}</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ color: '#f0e000', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>
+                    {u.role === 'siswa' ? (u.poinPG||0)+(u.poinEssay||0)+(u.poinModul||0) : (u.poinUpload||0)+(u.poinNilai||0)} pts
+                  </p>
+                  <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>✏️ Klik edit</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // ADMIN DETAIL USER
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'adminDetailUser' && selectedUser) return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="adminDashboard" fn={() => { setSelectedUser(null); setPage('adminDashboard'); }} />
+      {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
+      <div style={{ ...S.card, border: '1px solid #4fc3f7' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+          <div style={{ fontSize: '36px' }}>{selectedUser.role === 'siswa' ? '🎓' : '👨‍🏫'}</div>
+          <div>
+            <p style={{ fontWeight: '900', fontSize: '16px', margin: '0 0 2px' }}>{selectedUser.nama}</p>
+            <p style={{ color: '#4fc3f7', fontSize: '12px', margin: 0 }}>{selectedUser.role === 'siswa' ? `Siswa — Kelas ${selectedUser.kelas}-${selectedUser.jurusan}` : `Guru — ${selectedUser.mapel}`}</p>
+            <p style={{ color: '#aaa', fontSize: '11px', margin: '2px 0 0' }}>{selectedUser.email}</p>
+          </div>
+        </div>
+        <div style={{ fontSize: '12px', color: '#ccc', lineHeight: '1.8' }}>
+          {selectedUser.role === 'siswa' ? (
+            <><p style={{ margin: 0 }}>NISN: {selectedUser.nisn}</p><p style={{ margin: 0 }}>Lahir: {selectedUser.tglLahir}</p><p style={{ margin: 0 }}>Telp: {selectedUser.telpon}</p><p style={{ margin: 0 }}>Agama: {selectedUser.agama}</p></>
+          ) : (
+            <><p style={{ margin: 0 }}>NIP: {selectedUser.nip||'-'}</p><p style={{ margin: 0 }}>NIK: {selectedUser.nik||'-'}</p><p style={{ margin: 0 }}>Jabatan: {selectedUser.jabatan}</p></>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...S.card, border: '1px solid #8e44ad' }}>
+        <p style={{ color: '#8e44ad', fontWeight: 'bold', marginBottom: '12px' }}>🏆 Edit Poin</p>
+        {selectedUser.role === 'siswa' ? (
+          <>
+            <label style={S.label}>Poin PG (maks 20)</label>
+            <input style={S.input} type="number" value={editPoinForm.poinPG} onChange={e => setEditPoinForm(p => ({ ...p, poinPG: e.target.value }))} />
+            <label style={S.label}>Poin Essay (maks 30)</label>
+            <input style={S.input} type="number" value={editPoinForm.poinEssay} onChange={e => setEditPoinForm(p => ({ ...p, poinEssay: e.target.value }))} />
+            <label style={S.label}>Poin Modul (maks 50)</label>
+            <input style={S.input} type="number" value={editPoinForm.poinModul} onChange={e => setEditPoinForm(p => ({ ...p, poinModul: e.target.value }))} />
+          </>
+        ) : (
+          <>
+            <label style={S.label}>Poin Upload</label>
+            <input style={S.input} type="number" value={editPoinForm.poinUpload} onChange={e => setEditPoinForm(p => ({ ...p, poinUpload: e.target.value }))} />
+            <label style={S.label}>Poin Nilai</label>
+            <input style={S.input} type="number" value={editPoinForm.poinNilai} onChange={e => setEditPoinForm(p => ({ ...p, poinNilai: e.target.value }))} />
+          </>
+        )}
+        <label style={S.label}>Pelanggaran</label>
+        <input style={S.input} type="number" value={editPoinForm.pelanggaran} onChange={e => setEditPoinForm(p => ({ ...p, pelanggaran: e.target.value }))} />
+        <button onClick={() => simpanEditPoin(selectedUser.uid)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>💾 Simpan Poin</button>
+      </div>
+
+      <div style={{ ...S.card, border: '1px solid #6c3483' }}>
+        <p style={{ color: '#8e44ad', fontWeight: 'bold', marginBottom: '8px' }}>🔑 Reset Password</p>
+        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '10px' }}>Email reset dikirim ke: <strong style={{ color: 'white' }}>{selectedUser.email}</strong></p>
+        <button onClick={() => resetPassword(selectedUser.email)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#6c3483,#4a235a)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>📧 Kirim Email Reset Password</button>
+      </div>
+
+      <div style={{ ...S.card, border: '1px solid #2a5f7a' }}>
+        <p style={{ color: '#4fc3f7', fontWeight: 'bold', marginBottom: '8px' }}>📊 Ubah Status</p>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => approveUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#1e8449', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>✅ Setujui</button>
+          <button onClick={() => rejectUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#b7860b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🚫 Tolak</button>
+        </div>
+      </div>
+
+      <div style={{ ...S.card, border: '1px solid #e74c3c' }}>
+        <p style={{ color: '#e74c3c', fontWeight: 'bold', marginBottom: '8px' }}>⚠️ Hapus dari Sistem</p>
+        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '10px' }}>Tindakan ini tidak bisa dibatalkan!</p>
+        <button onClick={() => hapusUser(selectedUser.uid)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>🗑️ Hapus User Ini</button>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // ADMIN SETTINGS
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'adminSettings') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="adminDashboard" fn={() => { setAdminTab('pending'); loadAdminUsers('pending'); setPage('adminDashboard'); }} />
+      {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
+      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>⚙️ Pengaturan Aplikasi</p>
+      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Edit tampilan dan info aplikasi</p>
+      <div style={{ ...S.card, border: '1px solid #1e8449', width: '100%' }}>
+        <p style={{ color: '#27ae60', fontWeight: 'bold', marginBottom: '12px' }}>📝 Info Sekolah</p>
+        <label style={S.label}>Nama Sekolah</label>
+        <input style={S.input} value={appSettings.namaSekolah} onChange={e => setAppSettings(p => ({ ...p, namaSekolah: e.target.value }))} />
+        <label style={S.label}>Tagline</label>
+        <input style={S.input} value={appSettings.tagline} onChange={e => setAppSettings(p => ({ ...p, tagline: e.target.value }))} />
+        <label style={S.label}>Teks Sambutan</label>
+        <input style={S.input} value={appSettings.welcomeText} onChange={e => setAppSettings(p => ({ ...p, welcomeText: e.target.value }))} />
+        <button onClick={simpanAppSettings} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>💾 Simpan Pengaturan</button>
+      </div>
+      <div style={{ ...S.card, border: '1px solid #2a5f7a' }}>
+        <p style={{ color: '#4fc3f7', fontWeight: 'bold', marginBottom: '12px' }}>📊 Statistik Aplikasi</p>
+        <button onClick={async () => {
+          const snap = await getDocs(collection(db, 'users'));
+          const users = snap.docs.map(d => d.data());
+          const siswa = users.filter(u => u.role === 'siswa' && u.status === 'approved').length;
+          const guru = users.filter(u => u.role === 'guru' && u.status === 'approved').length;
+          const pending = users.filter(u => u.status === 'pending').length;
+          setAdminMsg(`📊 Siswa Aktif: ${siswa} | Guru Aktif: ${guru} | Pending: ${pending}`);
+          setTimeout(() => setAdminMsg(''), 5000);
+        }} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1565c0,#0d47a1)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>
+          📊 Lihat Statistik
+        </button>
+      </div>
+      <div style={{ ...S.card, border: '1px solid #f39c12' }}>
+        <p style={{ color: '#f39c12', fontWeight: 'bold', marginBottom: '8px' }}>🔐 Info Kredensial Admin</p>
+        <p style={{ color: '#ccc', fontSize: '13px', margin: '0 0 4px' }}>Email: <strong style={{ color: 'white' }}>{ADMIN_EMAIL}</strong></p>
+        <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>Password tersimpan di kode aplikasi</p>
+      </div>
     </div>
   );
 
@@ -898,8 +1255,16 @@ function App() {
               onClick={() => {
                 if (!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
                 setSelectedMapel(m);
-                loadBab(m.nama);
-                setPage('forumBab');
+                if (userRole === 'siswa') {
+                  // Siswa langsung ke bab sesuai kelasnya sendiri
+                  loadBab(m.nama);
+                  setSelectedKelas({ tingkat: userData.kelas, jurusan: userData.jurusan });
+                  setPage('forumBab');
+                } else {
+                  // Guru pilih kelas dulu
+                  setGuruPilihTingkat(null);
+                  setPage('forumPilihKelas');
+                }
               }}
               style={{
                 padding: '16px 10px', borderRadius: '14px', border: 'none',
@@ -923,14 +1288,69 @@ function App() {
   );
 
   // ══════════════════════════════════════════════════════════════════
-  // FORUM — DAFTAR BAB
+  // FORUM — PILIH KELAS (khusus guru)
   // ══════════════════════════════════════════════════════════════════
-  if (page === 'forumBab') return (
+  if (page === 'forumPilihKelas') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forum" />
       <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
         {selectedMapel?.icon} {selectedMapel?.nama}
+      </p>
+      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Pilih Kelas</p>
+
+      {/* Pilih Tingkat dulu */}
+      {!guruPilihTingkat ? (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>📚 Pilih Tingkat Kelas:</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {['10', '11', '12'].map(tingkat => (
+              <button key={tingkat} onClick={() => setGuruPilihTingkat(tingkat)}
+                style={{ width: '100%', padding: '20px', borderRadius: '14px', border: 'none', background: `linear-gradient(135deg,${selectedMapel?.warna},${selectedMapel?.warna}99)`, color: 'white', fontWeight: '900', fontSize: '22px', cursor: 'pointer', boxShadow: `0 4px 15px ${selectedMapel?.warna}44` }}>
+                Kelas {tingkat}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{ width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <button onClick={() => setGuruPilihTingkat(null)}
+              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid #4fc3f7', color: '#4fc3f7', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>
+              ← Kelas {guruPilihTingkat}
+            </button>
+            <p style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '15px', margin: 0 }}>Pilih Jurusan:</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '8px', width: '100%' }}>
+            {['A','B','C','D','E','F','G','H','I','J'].map(j => (
+              <button key={j} onClick={() => {
+                  const kelas = { tingkat: guruPilihTingkat, jurusan: j };
+                  setSelectedKelas(kelas);
+                  loadBab(selectedMapel.nama);
+                  setPage('forumBab');
+                }}
+                style={{ padding: '16px 8px', borderRadius: '12px', border: 'none', background: `linear-gradient(135deg,${selectedMapel?.warna},${selectedMapel?.warna}99)`, color: 'white', fontWeight: '900', fontSize: '18px', cursor: 'pointer', boxShadow: `0 4px 12px ${selectedMapel?.warna}44` }}>
+                {guruPilihTingkat}{j}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // FORUM — DAFTAR BAB
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'forumBab') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to={userRole === 'guru' ? 'forumPilihKelas' : 'forum'} />
+      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
+        {selectedMapel?.icon} {selectedMapel?.nama}
+      </p>
+      <p style={{ color: '#4fc3f7', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
+        📚 Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
       <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Pilih Bab Pembelajaran</p>
       <div style={{ width: '100%' }}>
@@ -1007,7 +1427,9 @@ function App() {
       <TopBar />
       <BackBtn to="forumBab" fn={() => { stopTimerModul(); stopTimerVideo(); setPage('forumBab'); }} />
       <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>{selectedBab?.judul}</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '16px' }}>{selectedMapel?.nama}</p>
+      <p style={{ color: '#4fc3f7', fontSize: '13px', fontWeight: 'bold', marginBottom: '2px' }}>
+        {selectedMapel?.nama} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
+      </p>
 
       {userRole === 'siswa' && (
         <div style={{ ...S.card, border: '1px solid #27ae60', marginBottom: '16px' }}>
@@ -1108,7 +1530,7 @@ function App() {
                   style={{ background: '#8e44ad', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
                   ✏️ Buat / Edit Soal Quiz
                 </button>
-                <button onClick={() => { loadHasilSiswa(selectedBab.id); setPage('guruKelola'); }}
+                <button onClick={() => { loadHasilSiswa(selectedBab.id, `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`); setPage('guruKelola'); }}
                   style={{ background: '#1a5276', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
                   📊 Lihat Hasil Siswa
                 </button>
@@ -1333,7 +1755,9 @@ function App() {
       <TopBar />
       <BackBtn to="forumIsiBab" />
       <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>Hasil Siswa</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '16px' }}>{selectedMapel?.nama} — {selectedBab?.judul}</p>
+      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '16px' }}>
+        {selectedMapel?.nama} — {selectedBab?.judul} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
+      </p>
 
       <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '16px' }}>
         {[
