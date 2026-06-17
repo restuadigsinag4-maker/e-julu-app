@@ -638,81 +638,98 @@ function App() {
     alert('Nilai essay tersimpan!');
   };
 
-  // ── STYLES ────────────────────────────────────────────────────
+  // ── STYLES (REDESIGNED) ──────────────────────────────────────
   const S = {
     page: {
       minHeight: '100vh',
-      background: 'linear-gradient(180deg,#0a1628 0%,#0d2137 60%,#0a1628 100%)',
+      background: 'linear-gradient(160deg,#04091a 0%,#071428 40%,#0a1f3a 70%,#04091a 100%)',
       color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '20px 16px 40px', fontFamily: "'Segoe UI',sans-serif",
+      padding: '24px 18px 80px', fontFamily: "'Segoe UI',system-ui,sans-serif",
       maxWidth: '430px', margin: '0 auto',
     },
     input: {
-      width: '100%', padding: '12px 14px', borderRadius: '8px',
-      border: '1px solid #2a5f7a', background: 'rgba(255,255,255,0.08)',
-      color: 'white', fontSize: '14px', marginBottom: '10px',
+      width: '100%', padding: '13px 16px', borderRadius: '12px',
+      border: '1.5px solid rgba(0,200,255,0.2)',
+      background: 'rgba(0,200,255,0.06)',
+      color: 'white', fontSize: '14px', marginBottom: '12px',
       outline: 'none', boxSizing: 'border-box',
     },
-    label: { fontSize: '13px', color: '#cde8f0', marginBottom: '4px', display: 'block' },
+    label: { fontSize: '11px', color: 'rgba(130,200,255,0.75)', marginBottom: '5px', display: 'block', fontWeight: '700', letterSpacing: '0.8px', textTransform: 'uppercase' },
     select: {
-      width: '100%', padding: '12px 14px', borderRadius: '8px',
-      border: '1px solid #2a5f7a', background: '#0d2137',
-      color: 'white', fontSize: '14px', marginBottom: '10px',
+      width: '100%', padding: '13px 16px', borderRadius: '12px',
+      border: '1.5px solid rgba(0,200,255,0.2)', background: 'rgba(4,15,35,0.95)',
+      color: 'white', fontSize: '14px', marginBottom: '12px',
       outline: 'none', boxSizing: 'border-box',
     },
     btnBack: {
       alignSelf: 'flex-start',
-      background: 'linear-gradient(135deg,#1565c0,#0d47a1)',
-      border: '2px solid #4fc3f7', color: 'white', fontSize: '15px',
-      fontWeight: 'bold', padding: '10px 24px', borderRadius: '10px',
-      cursor: 'pointer', marginBottom: '14px',
+      background: 'rgba(0,200,255,0.08)',
+      border: '1px solid rgba(0,200,255,0.3)', color: '#00c8ff', fontSize: '13px',
+      fontWeight: '700', padding: '8px 18px', borderRadius: '30px',
+      cursor: 'pointer', marginBottom: '18px',
     },
     btnOrange: {
-      width: '100%', padding: '14px', borderRadius: '30px', border: 'none',
-      background: 'linear-gradient(135deg,#f0a500,#e07b00)',
-      color: 'white', fontWeight: 'bold', fontSize: '18px',
+      width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
+      background: 'linear-gradient(135deg,#ff8c00,#e05000)',
+      color: 'white', fontWeight: '800', fontSize: '16px',
       cursor: 'pointer', marginTop: '8px',
+      boxShadow: '0 8px 28px rgba(255,100,0,0.3)',
     },
     btnBlue: {
-      flex: 1, padding: '16px', borderRadius: '12px',
-      border: '2px solid #4fc3f7',
-      background: 'linear-gradient(180deg,#1565c0 0%,#0d47a1 60%,#1565c0 100%)',
-      cursor: 'pointer', fontWeight: 'bold', fontSize: '20px',
+      flex: 1, padding: '18px', borderRadius: '16px',
+      border: '1px solid rgba(0,200,255,0.35)',
+      background: 'linear-gradient(160deg,rgba(0,80,180,0.7),rgba(0,40,120,0.9))',
+      cursor: 'pointer', fontWeight: '800', fontSize: '18px',
+      backdropFilter: 'blur(8px)',
     },
     btnTeal: {
-      width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-      background: 'linear-gradient(135deg,#1a5276,#117a65)',
-      color: 'white', fontWeight: 'bold', fontSize: '18px', cursor: 'pointer',
-      marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '14px',
+      width: '100%', padding: '17px 20px', borderRadius: '16px', border: 'none',
+      background: 'linear-gradient(135deg,rgba(0,160,130,0.85),rgba(0,110,90,0.95))',
+      color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer',
+      marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '14px',
+      boxShadow: '0 6px 20px rgba(0,160,130,0.2)',
     },
     btnGold: {
-      width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-      background: 'linear-gradient(135deg,#b7860b,#8B6914)',
-      color: 'white', fontWeight: 'bold', fontSize: '18px', cursor: 'pointer',
+      width: '100%', padding: '17px 20px', borderRadius: '16px', border: 'none',
+      background: 'linear-gradient(135deg,rgba(200,130,0,0.9),rgba(150,90,0,0.95))',
+      color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer',
       display: 'flex', alignItems: 'center', gap: '14px',
+      boxShadow: '0 6px 20px rgba(200,130,0,0.2)',
     },
     pwWrap: { position: 'relative', width: '100%' },
     eyeBtn: {
-      position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-60%)',
-      background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '16px',
+      position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-65%)',
+      background: 'none', border: 'none', color: 'rgba(130,200,255,0.5)', cursor: 'pointer', fontSize: '15px',
     },
-    errBox: { background: 'rgba(231,76,60,0.2)', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', color: '#ff6b6b', fontSize: '13px', marginBottom: '12px', width: '100%' },
-    successBox: { background: 'rgba(39,174,96,0.2)', border: '1px solid #27ae60', borderRadius: '8px', padding: '10px 14px', color: '#2ecc71', fontSize: '13px', marginBottom: '12px', width: '100%' },
+    errBox: {
+      background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,80,80,0.35)',
+      borderRadius: '12px', padding: '12px 16px',
+      color: '#ff8080', fontSize: '13px', marginBottom: '14px', width: '100%',
+    },
+    successBox: {
+      background: 'rgba(0,210,120,0.1)', border: '1px solid rgba(0,210,120,0.35)',
+      borderRadius: '12px', padding: '12px 16px',
+      color: '#00d278', fontSize: '13px', marginBottom: '14px', width: '100%',
+    },
     card: {
-      background: 'rgba(255,255,255,0.07)', borderRadius: '12px',
-      padding: '16px', width: '100%', marginBottom: '12px',
+      background: 'rgba(255,255,255,0.03)',
+      border: '1px solid rgba(0,200,255,0.1)',
+      borderRadius: '16px', padding: '16px', width: '100%', marginBottom: '12px',
     },
     linkBtn: {
       display: 'flex', alignItems: 'center', gap: '10px',
-      padding: '13px 16px', borderRadius: '10px', color: 'white',
-      fontWeight: 'bold', fontSize: '14px', textDecoration: 'none',
+      padding: '14px 18px', borderRadius: '12px', color: 'white',
+      fontWeight: '700', fontSize: '14px', textDecoration: 'none',
     },
   };
 
   const TopBar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '20px', width: '100%' }}>
-      <span style={{ fontSize: '26px' }}>📚</span>
-      <span style={{ fontSize: '22px', fontWeight: '900', color: 'white', letterSpacing: '1px' }}>E-JULU</span>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '24px', width: '100%' }}>
+      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg,#0066ff,#00aaff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', boxShadow: '0 4px 14px rgba(0,150,255,0.4)' }}>📚</div>
+      <div>
+        <span style={{ fontSize: '20px', fontWeight: '900', color: 'white', letterSpacing: '2px' }}>E-JULU</span>
+        <div style={{ fontSize: '9px', color: 'rgba(0,200,255,0.7)', letterSpacing: '1.5px', marginTop: '-2px' }}>E-LEARNING PLATFORM</div>
+      </div>
     </div>
   );
 
@@ -720,14 +737,16 @@ function App() {
     <div style={{
       position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
       width: '100%', maxWidth: '430px',
-      background: 'linear-gradient(90deg,#0d3320,#145a32,#0d3320)',
-      borderTop: '1px solid #27ae60', padding: '10px 16px',
-      textAlign: 'center', fontSize: '12px', color: '#2ecc71', fontWeight: '600', zIndex: 999,
+      background: 'rgba(4,9,26,0.95)',
+      borderTop: '1px solid rgba(0,200,255,0.15)', padding: '10px 16px',
+      textAlign: 'center', fontSize: '11px', color: 'rgba(0,200,255,0.5)',
+      fontWeight: '600', zIndex: 999, backdropFilter: 'blur(20px)',
+      letterSpacing: '0.5px',
     }}>✦ Development By Restuadi G. Sinaga, S.Kom ✦</div>
   );
 
   const BackBtn = ({ to, fn }) => (
-    <button style={S.btnBack} onClick={() => { if (fn) fn(); else setPage(to); }}>← Kembali</button>
+    <button style={S.btnBack} onClick={() => { if (fn) fn(); else setPage(to); }}>‹ Kembali</button>
   );
 
   const PwInput = ({ placeholder, val, setVal, show, setShow }) => (
@@ -741,8 +760,9 @@ function App() {
 
   const LoadingSpinner = () => (
     <div style={{ textAlign: 'center', padding: '40px' }}>
-      <div style={{ fontSize: '40px', marginBottom: '12px' }}>⏳</div>
-      <p style={{ color: '#aaa' }}>Mohon tunggu...</p>
+      <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '3px solid rgba(0,200,255,0.15)', borderTop: '3px solid #00c8ff', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
+      <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '13px', letterSpacing: '1px' }}>Memuat...</p>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 
@@ -757,18 +777,23 @@ function App() {
   // SPLASH
   // ══════════════════════════════════════════════════════════════════
   if (page === 'splash') return (
-    <div style={S.page}>
-      <TopBar />
-      <img src="/bbb.png" alt="E-JULU" style={{ height: '64px', marginBottom: '12px' }} />
-      <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', textAlign: 'center', margin: '4px 0' }}>Selamat Datang di E-Julu!</p>
-      <p style={{ color: '#00e5ff', fontSize: '22px', fontWeight: '700', margin: '2px 0' }}>E-Learning</p>
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', textAlign: 'center', margin: '2px 0 20px' }}>SMA NEGERI 1 LUMBANJULU</p>
-      <img src="/logo_sekolah.png" alt="Logo" style={{ width: '210px', marginBottom: '24px' }} />
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', width: '100%' }}>
-        <img src="/robot.png" alt="Robot" style={{ height: '155px' }} />
-        <button onClick={() => setPage('role')}
-          style={{ ...S.btnOrange, width: 'auto', padding: '14px 44px', fontSize: '22px', marginBottom: '10px' }}>
-          START
+    <div style={{ ...S.page, justifyContent: 'center', minHeight: '100vh', padding: '0' }}>
+      {/* Background glow effects */}
+      <div style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', width: '300px', height: '300px', background: 'radial-gradient(circle,rgba(0,100,255,0.15) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '20%', left: '10%', width: '150px', height: '150px', background: 'radial-gradient(circle,rgba(0,200,255,0.08) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', padding: '40px 24px 120px', boxSizing: 'border-box' }}>
+        {/* Logo badge */}
+        <div style={{ width: '90px', height: '90px', borderRadius: '24px', background: 'linear-gradient(135deg,#0055cc,#0099ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '42px', boxShadow: '0 12px 40px rgba(0,130,255,0.5)', marginBottom: '20px' }}>📚</div>
+        <p style={{ fontSize: '11px', color: 'rgba(0,200,255,0.7)', letterSpacing: '4px', margin: '0 0 6px', fontWeight: '700' }}>SELAMAT DATANG DI</p>
+        <p style={{ fontSize: '36px', fontWeight: '900', color: 'white', margin: '0 0 4px', letterSpacing: '3px', textAlign: 'center' }}>E-JULU</p>
+        <p style={{ fontSize: '13px', color: 'rgba(0,200,255,0.8)', letterSpacing: '2px', margin: '0 0 6px', fontWeight: '600' }}>E-LEARNING PLATFORM</p>
+        <div style={{ width: '60px', height: '2px', background: 'linear-gradient(90deg,transparent,#00aaff,transparent)', margin: '10px 0 20px' }} />
+        <img src="/logo_sekolah.png" alt="Logo" style={{ width: '100px', height: '100px', objectFit: 'contain', marginBottom: '16px', borderRadius: '50%', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }} />
+        <p style={{ fontSize: '15px', fontWeight: '800', color: '#ffd700', textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.5px' }}>SMA NEGERI 1 LUMBANJULU</p>
+        <p style={{ fontSize: '12px', color: 'rgba(200,220,255,0.5)', margin: '0 0 40px', letterSpacing: '1px' }}>Kabupaten Toba · Sumatera Utara</p>
+        <img src="/robot.png" alt="Robot" style={{ height: '130px', marginBottom: '32px', filter: 'drop-shadow(0 10px 20px rgba(0,150,255,0.4))' }} />
+        <button onClick={() => setPage('role')} style={{ ...S.btnOrange, width: '200px', padding: '18px', fontSize: '18px', fontWeight: '900', letterSpacing: '3px', borderRadius: '50px' }}>
+          MULAI
         </button>
       </div>
       <Footer />
@@ -781,31 +806,31 @@ function App() {
   if (page === 'menunggu') return (
     <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
       <TopBar />
-      <div style={{ fontSize: '64px', marginBottom: '16px' }}>⏳</div>
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '8px' }}>Pendaftaran Terkirim!</p>
-      <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.7', marginBottom: '24px' }}>
-        Akun kamu sedang menunggu<br />persetujuan dari admin.<br />
-        Kamu akan bisa login setelah<br />admin menyetujui pendaftaranmu.
+      <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,130,0,0.2),rgba(150,80,0,0.3))', border: '2px solid rgba(255,180,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '20px', boxShadow: '0 8px 30px rgba(200,130,0,0.2)' }}>⏳</div>
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', marginBottom: '8px', letterSpacing: '0.5px' }}>Pendaftaran Terkirim!</p>
+      <p style={{ color: 'rgba(200,220,255,0.6)', fontSize: '14px', lineHeight: '1.8', marginBottom: '24px' }}>
+        Akunmu sedang menunggu<br />persetujuan admin sekolah.<br />
+        Kamu bisa login setelah disetujui.
       </p>
-      <div style={{ ...S.card, border: '1px solid #4fc3f7' }}>
-        <p style={{ color: '#4fc3f7', fontSize: '13px', margin: 0 }}>
-          💡 Hubungi admin sekolah jika butuh konfirmasi lebih cepat.
+      <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.2)', textAlign: 'left' }}>
+        <p style={{ color: 'rgba(0,200,255,0.8)', fontSize: '13px', margin: 0, lineHeight: '1.6' }}>
+          💡 Hubungi admin sekolah untuk konfirmasi lebih cepat.
         </p>
       </div>
-      <button onClick={() => setPage('role')} style={{ ...S.btnOrange, marginTop: '16px' }}>← Kembali ke Halaman Utama</button>
+      <button onClick={() => setPage('role')} style={{ ...S.btnOrange, marginTop: '20px' }}>← Kembali ke Beranda</button>
     </div>
   );
 
   if (page === 'ditolak') return (
     <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
       <TopBar />
-      <div style={{ fontSize: '64px', marginBottom: '16px' }}>❌</div>
-      <p style={{ color: '#e74c3c', fontSize: '20px', fontWeight: '900', marginBottom: '8px' }}>Pendaftaran Ditolak</p>
-      <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.7', marginBottom: '24px' }}>
-        Maaf, pendaftaran kamu ditolak oleh admin.<br />
-        Hubungi admin sekolah untuk informasi lebih lanjut.
+      <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,30,30,0.2),rgba(140,10,10,0.3))', border: '2px solid rgba(255,80,80,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '20px', boxShadow: '0 8px 30px rgba(200,30,30,0.2)' }}>❌</div>
+      <p style={{ color: '#ff6060', fontSize: '20px', fontWeight: '900', marginBottom: '8px' }}>Pendaftaran Ditolak</p>
+      <p style={{ color: 'rgba(200,220,255,0.6)', fontSize: '14px', lineHeight: '1.8', marginBottom: '24px' }}>
+        Maaf, pendaftaranmu ditolak oleh admin.<br />
+        Hubungi admin sekolah untuk info lebih lanjut.
       </p>
-      <button onClick={() => setPage('role')} style={S.btnOrange}>← Kembali ke Halaman Utama</button>
+      <button onClick={() => setPage('role')} style={S.btnOrange}>← Kembali ke Beranda</button>
     </div>
   );
 
@@ -816,18 +841,23 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="splash" />
-      <p style={{ fontSize: '18px', textAlign: 'center', margin: '20px 0 28px', lineHeight: '1.7' }}>
-        Untuk melanjutkan<br />apakah anda sebagai:
-      </p>
-      <div style={{ display: 'flex', gap: '16px', width: '100%', marginBottom: '16px' }}>
-        <button onClick={() => setPage('menuGuru')} style={{ ...S.btnBlue, color: '#00e5ff' }}>GURU</button>
-        <button onClick={() => setPage('menuSiswa')} style={{ ...S.btnBlue, color: '#f0e000' }}>SISWA</button>
+      <p style={{ fontSize: '13px', color: 'rgba(150,210,255,0.6)', textAlign: 'center', marginBottom: '8px', letterSpacing: '2px', fontWeight: '700' }}>MASUK SEBAGAI</p>
+      <p style={{ fontSize: '22px', fontWeight: '900', textAlign: 'center', margin: '0 0 28px', color: 'white' }}>Pilih Peranmu</p>
+      <div style={{ display: 'flex', gap: '14px', width: '100%', marginBottom: '14px' }}>
+        <button onClick={() => setPage('menuGuru')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 16px', fontSize: '15px', fontWeight: '800' }}>
+          <span style={{ fontSize: '32px' }}>👨‍🏫</span>
+          <span style={{ color: '#00d4ff' }}>GURU</span>
+        </button>
+        <button onClick={() => setPage('menuSiswa')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 16px', fontSize: '15px', fontWeight: '800', border: '1px solid rgba(255,210,0,0.4)', background: 'linear-gradient(160deg,rgba(140,100,0,0.5),rgba(80,50,0,0.8))' }}>
+          <span style={{ fontSize: '32px' }}>🎓</span>
+          <span style={{ color: '#ffd700' }}>SISWA</span>
+        </button>
       </div>
       <button onClick={() => { setAdminEmail(''); setAdminPassword(''); setAdminError(''); setPage('loginAdmin'); }}
-        style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #555', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', marginBottom: '20px' }}>
-        🔐 LOGIN ADMIN
+        style={{ width: '100%', padding: '13px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', color: 'rgba(200,220,255,0.4)', fontWeight: '600', fontSize: '13px', cursor: 'pointer', marginBottom: '32px', letterSpacing: '1px' }}>
+        🔐 ADMIN
       </button>
-      <img src="/robot.png" alt="Robot" style={{ height: '190px', alignSelf: 'flex-start' }} />
+      <img src="/robot.png" alt="Robot" style={{ height: '160px', alignSelf: 'flex-start', filter: 'drop-shadow(0 8px 20px rgba(0,150,255,0.3))' }} />
     </div>
   );
 
@@ -839,8 +869,8 @@ function App() {
       <TopBar />
       <BackBtn to="role" />
       <div style={{ fontSize: '48px', marginBottom: '8px' }}>🔐</div>
-      <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', marginBottom: '4px' }}>LOGIN ADMIN</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '24px' }}>Akses khusus administrator</p>
+      <p style={{ color: '#ffd700', fontSize: '22px', fontWeight: '900', marginBottom: '4px' }}>LOGIN ADMIN</p>
+      <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px', marginBottom: '24px' }}>Akses khusus administrator</p>
       {adminError && <div style={S.errBox}>⚠️ {adminError}</div>}
       <div style={{ width: '100%' }}>
         <label style={S.label}>Email Admin:</label>
@@ -862,7 +892,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '16px' }}>
-        <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', margin: 0 }}>🛡️ PANEL ADMIN</p>
+        <p style={{ color: '#ffd700', fontSize: '18px', fontWeight: '900', margin: 0 }}>🛡️ PANEL ADMIN</p>
         <button onClick={() => setPage('role')} style={{ background: 'none', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer', fontSize: '13px' }}>🚪 Keluar</button>
       </div>
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
@@ -887,16 +917,16 @@ function App() {
       {adminTab === 'pending' && !adminLoading && (
         <div style={{ width: '100%' }}>
           <p style={{ color: '#f39c12', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>⏳ Menunggu Persetujuan ({adminUsers.length})</p>
-          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#aaa' }}>Tidak ada pendaftaran baru.</p></div>}
+          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: 'rgba(160,200,230,0.5)' }}>Tidak ada pendaftaran baru.</p></div>}
           {adminUsers.map((u, i) => (
             <div key={i} style={{ ...S.card, border: '1px solid #f39c12' }}>
               <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '15px' }}>{u.nama}</p>
               <p style={{ color: u.role === 'siswa' ? '#f0e000' : '#4fc3f7', fontSize: '12px', margin: '0 0 2px' }}>
                 {u.role === 'siswa' ? `🎓 Siswa — Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 Guru — ${u.mapel}`}
               </p>
-              <p style={{ color: '#aaa', fontSize: '12px', margin: '0 0 2px' }}>{u.email}</p>
-              <p style={{ color: '#aaa', fontSize: '11px', margin: '0 0 6px' }}>{u.role === 'siswa' ? `NISN: ${u.nisn} | Agama: ${u.agama}` : `NIP/NIK: ${u.nip || u.nik} | Jabatan: ${u.jabatan}`}</p>
-              <p style={{ color: '#ccc', fontSize: '12px', margin: '0 0 10px' }}>📝 {u.bio}</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', margin: '0 0 2px' }}>{u.email}</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: '0 0 6px' }}>{u.role === 'siswa' ? `NISN: ${u.nisn} | Agama: ${u.agama}` : `NIP/NIK: ${u.nip || u.nik} | Jabatan: ${u.jabatan}`}</p>
+              <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '12px', margin: '0 0 10px' }}>📝 {u.bio}</p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => approveUser(u.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>✅ Setujui</button>
                 <button onClick={() => rejectUser(u.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>❌ Tolak</button>
@@ -909,15 +939,15 @@ function App() {
 
       {adminTab === 'all' && !adminLoading && (
         <div style={{ width: '100%' }}>
-          <p style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>👥 Semua User ({adminUsers.length})</p>
-          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#aaa' }}>Belum ada user.</p></div>}
+          <p style={{ color: '#00c8ff', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>👥 Semua User ({adminUsers.length})</p>
+          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: 'rgba(160,200,230,0.5)' }}>Belum ada user.</p></div>}
           {adminUsers.map((u, i) => (
             <div key={i} style={{ ...S.card, border: `1px solid ${u.status === 'approved' ? '#27ae60' : u.status === 'pending' ? '#f39c12' : '#e74c3c'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '14px' }}>{u.nama}</p>
-                  <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}>{u.role === 'siswa' ? `🎓 Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 ${u.mapel}`}</p>
-                  <p style={{ color: '#aaa', fontSize: '11px', margin: '2px 0 0' }}>{u.email}</p>
+                  <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', margin: 0 }}>{u.role === 'siswa' ? `🎓 Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 ${u.mapel}`}</p>
+                  <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: '2px 0 0' }}>{u.email}</p>
                 </div>
                 <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '20px', background: u.status === 'approved' ? '#1e8449' : u.status === 'pending' ? '#b7860b' : '#922b21', color: 'white', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                   {u.status === 'approved' ? '✅ Aktif' : u.status === 'pending' ? '⏳ Pending' : '❌ Ditolak'}
@@ -939,20 +969,20 @@ function App() {
       {adminTab === 'poin' && !adminLoading && (
         <div style={{ width: '100%' }}>
           <p style={{ color: '#8e44ad', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>🏆 Edit Poin ({adminUsers.length} user aktif)</p>
-          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#aaa' }}>Belum ada user aktif.</p></div>}
+          {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: 'rgba(160,200,230,0.5)' }}>Belum ada user aktif.</p></div>}
           {adminUsers.map((u, i) => (
             <div key={i} style={{ ...S.card, border: '1px solid #8e44ad', cursor: 'pointer' }}
               onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); setPage('adminDetailUser'); }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div>
                   <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '14px' }}>{u.nama}</p>
-                  <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}>{u.role === 'siswa' ? `🎓 Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 ${u.mapel}`}</p>
+                  <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', margin: 0 }}>{u.role === 'siswa' ? `🎓 Kelas ${u.kelas}-${u.jurusan}` : `👨‍🏫 ${u.mapel}`}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ color: '#f0e000', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>
+                  <p style={{ color: '#ffd700', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>
                     {u.role === 'siswa' ? (u.poinPG||0)+(u.poinEssay||0)+(u.poinModul||0) : (u.poinUpload||0)+(u.poinNilai||0)} pts
                   </p>
-                  <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>✏️ Klik edit</p>
+                  <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: 0 }}>✏️ Klik edit</p>
                 </div>
               </div>
             </div>
@@ -975,11 +1005,11 @@ function App() {
           <div style={{ fontSize: '36px' }}>{selectedUser.role === 'siswa' ? '🎓' : '👨‍🏫'}</div>
           <div>
             <p style={{ fontWeight: '900', fontSize: '16px', margin: '0 0 2px' }}>{selectedUser.nama}</p>
-            <p style={{ color: '#4fc3f7', fontSize: '12px', margin: 0 }}>{selectedUser.role === 'siswa' ? `Siswa — Kelas ${selectedUser.kelas}-${selectedUser.jurusan}` : `Guru — ${selectedUser.mapel}`}</p>
-            <p style={{ color: '#aaa', fontSize: '11px', margin: '2px 0 0' }}>{selectedUser.email}</p>
+            <p style={{ color: '#00c8ff', fontSize: '12px', margin: 0 }}>{selectedUser.role === 'siswa' ? `Siswa — Kelas ${selectedUser.kelas}-${selectedUser.jurusan}` : `Guru — ${selectedUser.mapel}`}</p>
+            <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: '2px 0 0' }}>{selectedUser.email}</p>
           </div>
         </div>
-        <div style={{ fontSize: '12px', color: '#ccc', lineHeight: '1.8' }}>
+        <div style={{ fontSize: '12px', color: 'rgba(200,220,255,0.65)', lineHeight: '1.8' }}>
           {selectedUser.role === 'siswa' ? (
             <><p style={{ margin: 0 }}>NISN: {selectedUser.nisn}</p><p style={{ margin: 0 }}>Lahir: {selectedUser.tglLahir}</p><p style={{ margin: 0 }}>Telp: {selectedUser.telpon}</p><p style={{ margin: 0 }}>Agama: {selectedUser.agama}</p></>
           ) : (
@@ -1014,12 +1044,12 @@ function App() {
 
       <div style={{ ...S.card, border: '1px solid #6c3483' }}>
         <p style={{ color: '#8e44ad', fontWeight: 'bold', marginBottom: '8px' }}>🔑 Reset Password</p>
-        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '10px' }}>Email reset dikirim ke: <strong style={{ color: 'white' }}>{selectedUser.email}</strong></p>
+        <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', marginBottom: '10px' }}>Email reset dikirim ke: <strong style={{ color: 'white' }}>{selectedUser.email}</strong></p>
         <button onClick={() => resetPassword(selectedUser.email)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#6c3483,#4a235a)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>📧 Kirim Email Reset Password</button>
       </div>
 
-      <div style={{ ...S.card, border: '1px solid #2a5f7a' }}>
-        <p style={{ color: '#4fc3f7', fontWeight: 'bold', marginBottom: '8px' }}>📊 Ubah Status</p>
+      <div style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
+        <p style={{ color: '#00c8ff', fontWeight: 'bold', marginBottom: '8px' }}>📊 Ubah Status</p>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => approveUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#1e8449', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>✅ Setujui</button>
           <button onClick={() => rejectUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#b7860b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🚫 Tolak</button>
@@ -1028,7 +1058,7 @@ function App() {
 
       <div style={{ ...S.card, border: '1px solid #e74c3c' }}>
         <p style={{ color: '#e74c3c', fontWeight: 'bold', marginBottom: '8px' }}>⚠️ Hapus dari Sistem</p>
-        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '10px' }}>Tindakan ini tidak bisa dibatalkan!</p>
+        <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', marginBottom: '10px' }}>Tindakan ini tidak bisa dibatalkan!</p>
         <button onClick={() => hapusUser(selectedUser.uid)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>🗑️ Hapus User Ini</button>
       </div>
     </div>
@@ -1042,10 +1072,10 @@ function App() {
       <TopBar />
       <BackBtn to="adminDashboard" fn={() => { setAdminTab('pending'); loadAdminUsers('pending'); setPage('adminDashboard'); }} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>⚙️ Pengaturan Aplikasi</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Edit tampilan dan info aplikasi</p>
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>⚙️ Pengaturan Aplikasi</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>Edit tampilan dan info aplikasi</p>
       <div style={{ ...S.card, border: '1px solid #1e8449', width: '100%' }}>
-        <p style={{ color: '#27ae60', fontWeight: 'bold', marginBottom: '12px' }}>📝 Info Sekolah</p>
+        <p style={{ color: '#00c878', fontWeight: 'bold', marginBottom: '12px' }}>📝 Info Sekolah</p>
         <label style={S.label}>Nama Sekolah</label>
         <input style={S.input} value={appSettings.namaSekolah} onChange={e => setAppSettings(p => ({ ...p, namaSekolah: e.target.value }))} />
         <label style={S.label}>Tagline</label>
@@ -1054,8 +1084,8 @@ function App() {
         <input style={S.input} value={appSettings.welcomeText} onChange={e => setAppSettings(p => ({ ...p, welcomeText: e.target.value }))} />
         <button onClick={simpanAppSettings} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>💾 Simpan Pengaturan</button>
       </div>
-      <div style={{ ...S.card, border: '1px solid #2a5f7a' }}>
-        <p style={{ color: '#4fc3f7', fontWeight: 'bold', marginBottom: '12px' }}>📊 Statistik Aplikasi</p>
+      <div style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
+        <p style={{ color: '#00c8ff', fontWeight: 'bold', marginBottom: '12px' }}>📊 Statistik Aplikasi</p>
         <button onClick={async () => {
           const snap = await getDocs(collection(db, 'users'));
           const users = snap.docs.map(d => d.data());
@@ -1070,8 +1100,8 @@ function App() {
       </div>
       <div style={{ ...S.card, border: '1px solid #f39c12' }}>
         <p style={{ color: '#f39c12', fontWeight: 'bold', marginBottom: '8px' }}>🔐 Info Kredensial Admin</p>
-        <p style={{ color: '#ccc', fontSize: '13px', margin: '0 0 4px' }}>Email: <strong style={{ color: 'white' }}>{ADMIN_EMAIL}</strong></p>
-        <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>Password tersimpan di kode aplikasi</p>
+        <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '13px', margin: '0 0 4px' }}>Email: <strong style={{ color: 'white' }}>{ADMIN_EMAIL}</strong></p>
+        <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: 0 }}>Password tersimpan di kode aplikasi</p>
       </div>
     </div>
   );
@@ -1083,15 +1113,15 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="role" />
-      <img src="/bbb.png" alt="E-JULU" style={{ height: '60px', marginBottom: '12px' }} />
-      <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', textAlign: 'center' }}>MENU AKSES SISWA</p>
-      <p style={{ color: '#ccc', fontSize: '13px', marginBottom: '24px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
-      <img src="/logo_sekolah.png" alt="Logo" style={{ width: '155px', marginBottom: '32px' }} />
+      <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,130,0,0.4),rgba(150,80,0,0.6))', border: '2px solid rgba(255,210,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', marginBottom: '14px', boxShadow: '0 8px 24px rgba(200,130,0,0.2)' }}>🎓</div>
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', textAlign: 'center', letterSpacing: '1px', margin: '0 0 4px' }}>AKSES SISWA</p>
+      <p style={{ color: 'rgba(200,200,200,0.5)', fontSize: '12px', marginBottom: '32px', letterSpacing: '1px' }}>SMA Negeri 1 Lumbanjulu</p>
+      <img src="/logo_sekolah.png" alt="Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '32px', borderRadius: '50%', boxShadow: '0 6px 20px rgba(0,0,0,0.4)' }} />
       <button style={S.btnTeal} onClick={() => { setLoginError(''); setPage('loginSiswa'); }}>
-        <span style={{ fontSize: '28px' }}>👤</span><span>LOGIN SISWA</span>
+        <span style={{ fontSize: '24px' }}>👤</span><span>LOGIN SISWA</span>
       </button>
       <button style={S.btnGold} onClick={() => setPage('registerSiswa')}>
-        <span style={{ fontSize: '28px' }}>📝</span><span>REGISTRASI SISWA BARU</span>
+        <span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR SISWA BARU</span>
       </button>
     </div>
   );
@@ -1100,15 +1130,15 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="role" />
-      <img src="/bbb.png" alt="E-JULU" style={{ height: '60px', marginBottom: '12px' }} />
-      <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', textAlign: 'center' }}>MENU AKSES GURU</p>
-      <p style={{ color: '#ccc', fontSize: '13px', marginBottom: '24px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
-      <img src="/logo_sekolah.png" alt="Logo" style={{ width: '155px', marginBottom: '32px' }} />
+      <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,200,0.4),rgba(0,50,140,0.6))', border: '2px solid rgba(0,200,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', marginBottom: '14px', boxShadow: '0 8px 24px rgba(0,100,200,0.2)' }}>👨‍🏫</div>
+      <p style={{ color: '#00d4ff', fontSize: '20px', fontWeight: '900', textAlign: 'center', letterSpacing: '1px', margin: '0 0 4px' }}>AKSES GURU</p>
+      <p style={{ color: 'rgba(200,200,200,0.5)', fontSize: '12px', marginBottom: '32px', letterSpacing: '1px' }}>SMA Negeri 1 Lumbanjulu</p>
+      <img src="/logo_sekolah.png" alt="Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '32px', borderRadius: '50%', boxShadow: '0 6px 20px rgba(0,0,0,0.4)' }} />
       <button style={S.btnTeal} onClick={() => { setLoginError(''); setPage('loginGuru'); }}>
-        <span style={{ fontSize: '28px' }}>👨‍🏫</span><span>LOGIN GURU</span>
+        <span style={{ fontSize: '24px' }}>👨‍🏫</span><span>LOGIN GURU</span>
       </button>
       <button style={S.btnGold} onClick={() => setPage('registerGuru')}>
-        <span style={{ fontSize: '28px' }}>📝</span><span>REGISTRASI GURU BARU</span>
+        <span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR GURU BARU</span>
       </button>
     </div>
   );
@@ -1120,10 +1150,10 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="menuSiswa" />
-      <img src="/bbb.png" alt="E-JULU" style={{ height: '60px', marginBottom: '12px' }} />
-      <p style={{ color: '#f0e000', fontSize: '24px', fontWeight: '900', marginBottom: '6px' }}>LOGIN SISWA</p>
-      <p style={{ color: '#ccc', fontSize: '14px', textAlign: 'center', marginBottom: '28px', lineHeight: '1.6' }}>
-        Anda login sebagai siswa<br />silahkan isi data berikut
+      <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,130,0,0.3),rgba(150,80,0,0.5))', border: '1.5px solid rgba(255,210,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', marginBottom: '14px' }}>🎓</div>
+      <p style={{ color: '#ffd700', fontSize: '22px', fontWeight: '900', marginBottom: '4px', letterSpacing: '1px' }}>LOGIN SISWA</p>
+      <p style={{ color: 'rgba(180,200,255,0.5)', fontSize: '12px', textAlign: 'center', marginBottom: '28px', letterSpacing: '1px' }}>
+        Masuk dengan NISN kamu
       </p>
       {loginError && <div style={S.errBox}>⚠️ {loginError}</div>}
       <div style={{ width: '100%' }}>
@@ -1133,10 +1163,10 @@ function App() {
         <label style={S.label}>Password:</label>
         <PwInput placeholder="••••••••" val={siswaLoginPassword}
           setVal={setSiswaLoginPassword} show={showLoginPassword} setShow={setShowLoginPassword} />
-        <p style={{ color: '#4fc3f7', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
+        <p style={{ color: '#00c8ff', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
           Lupa Password?
         </p>
-        <div style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid #f0c040', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px' }}>
+        <div style={{ background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)', borderRadius: '12px', padding: '10px 14px', marginBottom: '16px' }}>
           <p style={{ color: '#f0c040', fontSize: '12px', margin: 0 }}>⚠️ Akun harus sudah disetujui admin untuk bisa login.</p>
         </div>
         <button style={{ ...S.btnGold, borderRadius: '30px', justifyContent: 'center', fontSize: '17px' }}
@@ -1151,10 +1181,10 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="menuGuru" />
-      <img src="/bbb.png" alt="E-JULU" style={{ height: '60px', marginBottom: '12px' }} />
-      <p style={{ color: '#f0e000', fontSize: '24px', fontWeight: '900', marginBottom: '6px' }}>LOGIN GURU</p>
-      <p style={{ color: '#ccc', fontSize: '14px', textAlign: 'center', marginBottom: '28px', lineHeight: '1.6' }}>
-        Anda login sebagai guru<br />silahkan isi data berikut
+      <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,200,0.3),rgba(0,50,140,0.5))', border: '1.5px solid rgba(0,200,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', marginBottom: '14px' }}>👨‍🏫</div>
+      <p style={{ color: '#00d4ff', fontSize: '22px', fontWeight: '900', marginBottom: '4px', letterSpacing: '1px' }}>LOGIN GURU</p>
+      <p style={{ color: 'rgba(180,200,255,0.5)', fontSize: '12px', textAlign: 'center', marginBottom: '28px', letterSpacing: '1px' }}>
+        Masuk dengan NIP atau NIK kamu
       </p>
       {loginError && <div style={S.errBox}>⚠️ {loginError}</div>}
       <div style={{ width: '100%' }}>
@@ -1164,10 +1194,10 @@ function App() {
         <label style={S.label}>Password:</label>
         <PwInput placeholder="••••••••" val={guruLoginPassword}
           setVal={setGuruLoginPassword} show={showLoginPassword} setShow={setShowLoginPassword} />
-        <p style={{ color: '#4fc3f7', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
+        <p style={{ color: '#00c8ff', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
           Lupa Password?
         </p>
-        <div style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid #f0c040', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px' }}>
+        <div style={{ background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)', borderRadius: '12px', padding: '10px 14px', marginBottom: '16px' }}>
           <p style={{ color: '#f0c040', fontSize: '12px', margin: 0 }}>⚠️ Akun harus sudah disetujui admin untuk bisa login.</p>
         </div>
         <button style={{ ...S.btnGold, borderRadius: '30px', justifyContent: 'center', fontSize: '17px' }}
@@ -1183,60 +1213,65 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   if (page === 'dashboard') return (
     <div style={S.page}>
-      <TopBar />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'rgba(255,255,255,0.07)', borderRadius: '12px', padding: '12px 20px', marginBottom: '24px' }}>
-        <div style={{ textAlign: 'center', cursor: 'pointer' }}>
-          <div style={{ fontSize: '26px' }}>⚙️</div>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Pengaturan</div>
+      <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '430px', height: '180px', background: 'radial-gradient(ellipse at top,rgba(0,80,200,0.12) 0%,transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
+      <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
+        <TopBar />
+        <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,60,150,0.5),rgba(0,30,80,0.7))', border: '1px solid rgba(0,200,255,0.2)', borderRadius: '20px', padding: '16px 18px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(12px)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#0066ff,#00aaff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', boxShadow: '0 4px 14px rgba(0,130,255,0.4)', flexShrink: 0 }}>
+              {userRole === 'guru' ? '👨‍🏫' : '🎓'}
+            </div>
+            <div>
+              <p style={{ color: 'rgba(130,200,255,0.7)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 2px', textTransform: 'uppercase' }}>{userRole === 'guru' ? 'Guru' : `Kelas ${userData?.kelas}${userData?.jurusan}`}</p>
+              <p style={{ color: 'white', fontSize: '14px', fontWeight: '800', margin: 0 }}>{userData?.nama}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
+              <div style={{ fontSize: '16px' }}>⚙️</div>
+              <div style={{ fontSize: '8px', color: 'rgba(130,200,255,0.5)' }}>Setelan</div>
+            </div>
+            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
+              <div style={{ fontSize: '16px' }}>ℹ️</div>
+              <div style={{ fontSize: '8px', color: 'rgba(130,200,255,0.5)' }}>Tentang</div>
+            </div>
+          </div>
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#f0e000', fontSize: '13px', fontWeight: '700', margin: 0 }}>
-            {userRole === 'guru' ? '👨‍🏫 Guru' : '🎓 Siswa'}
-          </p>
-          <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}>{userData?.nama}</p>
+        {userRole === 'siswa' && (
+          <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,160,90,0.15),rgba(0,100,60,0.25))', border: '1px solid rgba(0,200,120,0.2)', borderRadius: '16px', padding: '14px 18px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ color: 'rgba(0,210,120,0.75)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 3px', textTransform: 'uppercase' }}>Total Poin Kamu</p>
+              <p style={{ color: 'white', fontSize: '26px', fontWeight: '900', margin: 0, lineHeight: 1 }}>
+                {(userData?.poinPG || 0) + (userData?.poinEssay || 0) + (userData?.poinModul || 0)}
+                <span style={{ fontSize: '12px', color: 'rgba(0,210,120,0.6)', fontWeight: '600', marginLeft: '4px' }}>poin</span>
+              </p>
+            </div>
+            <div style={{ fontSize: '32px' }}>🏆</div>
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginBottom: '14px' }}>
+          {[
+            { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,rgba(108,52,131,0.65),rgba(60,10,90,0.9))', glow: 'rgba(108,52,131,0.25)', to: 'forum' },
+            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,rgba(26,100,180,0.65),rgba(10,55,130,0.9))', glow: 'rgba(26,100,180,0.25)', to: '' },
+            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,rgba(170,40,40,0.65),rgba(110,10,10,0.9))', glow: 'rgba(170,40,40,0.25)', to: '' },
+            { label: 'Perpustakaan', icon: '📚', grad: 'linear-gradient(135deg,rgba(20,110,55,0.65),rgba(5,70,25,0.9))', glow: 'rgba(20,110,55,0.25)', to: '' },
+            { label: 'Ujian Sekolah', icon: '📋', grad: 'linear-gradient(135deg,rgba(130,25,25,0.65),rgba(80,5,5,0.9))', glow: 'rgba(130,25,25,0.25)', to: '' },
+            { label: 'Pesan',         icon: '💬', grad: 'linear-gradient(135deg,rgba(20,90,140,0.65),rgba(5,50,100,0.9))', glow: 'rgba(20,90,140,0.25)', to: '' },
+          ].map((m, i) => (
+            <button key={i} onClick={() => { if (m.to) setPage(m.to); }}
+              style={{ padding: '18px 14px', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.07)', background: m.grad, color: 'white', fontWeight: '700', fontSize: '13px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', boxShadow: `0 6px 20px ${m.glow}`, backdropFilter: 'blur(8px)', opacity: m.to ? 1 : 0.6, textAlign: 'left' }}>
+              <span style={{ fontSize: '24px' }}>{m.icon}</span>
+              <span style={{ lineHeight: '1.2' }}>{m.label}</span>
+            </button>
+          ))}
         </div>
-        <div style={{ textAlign: 'center', cursor: 'pointer' }}>
-          <div style={{ fontSize: '26px' }}>👤</div>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Profil</div>
-        </div>
-      </div>
-
-      {userRole === 'siswa' && (
-        <div style={{ ...S.card, border: '1px solid #27ae60', marginBottom: '16px' }}>
-          <p style={{ color: '#27ae60', fontWeight: 'bold', fontSize: '13px', margin: '0 0 4px' }}>📊 Total Poin Kamu</p>
-          <p style={{ color: 'white', fontSize: '22px', fontWeight: '900', margin: 0 }}>
-            {(userData?.poinPG || 0) + (userData?.poinEssay || 0) + (userData?.poinModul || 0)}/100
-          </p>
-        </div>
-      )}
-
-      {[
-        { label: 'Forum Belajar Online', icon: '💬', warna: '#6c3483', to: 'forum' },
-        { label: 'Daftar Siswa',         icon: '👥', warna: '#2471a3', to: '' },
-        { label: 'Daftar Guru',          icon: '👨‍🏫', warna: '#cb4335', to: '' },
-        { label: 'Perpustakaan',         icon: '📚', warna: '#1e8449', to: '' },
-        { label: 'Ujian Sekolah',        icon: '📋', warna: '#922b21', to: '' },
-        { label: 'Pesan Notifikasi',     icon: '🔔', warna: '#2980b9', to: '' },
-      ].map((m, i) => (
-        <button key={i} onClick={() => { if (m.to) setPage(m.to); }}
-          style={{
-            width: '100%', padding: '18px 24px', borderRadius: '30px', border: 'none',
-            background: `linear-gradient(135deg,${m.warna},${m.warna}bb)`,
-            color: 'white', fontWeight: 'bold', fontSize: '17px', cursor: 'pointer',
-            marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            boxShadow: `0 4px 15px ${m.warna}44`,
-          }}>
-          <span>{m.label}</span>
-          <span style={{ fontSize: '22px' }}>{m.icon}</span>
+        <button onClick={logout} style={{ width: '100%', padding: '12px', background: 'rgba(255,50,50,0.07)', border: '1px solid rgba(255,70,70,0.18)', color: 'rgba(255,110,110,0.75)', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+          🚪 Keluar / Logout
         </button>
-      ))}
-
-      <button onClick={logout}
-        style={{ marginTop: '16px', background: 'none', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '10px', padding: '10px 30px', cursor: 'pointer', fontSize: '14px' }}>
-        🚪 Keluar / Logout
-      </button>
+      </div>
     </div>
   );
+
 
   // ══════════════════════════════════════════════════════════════════
   // FORUM — PILIH MAPEL
@@ -1245,8 +1280,8 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>Forum Belajar Online</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Pilih Mata Pelajaran</p>
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>Forum Belajar Online</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>Pilih Mata Pelajaran</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%' }}>
         {mapelList.map(m => {
           const bisaAkses = userRole === 'siswa' || userData?.mapel === m.nama;
@@ -1294,15 +1329,15 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forum" />
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
         {selectedMapel?.icon} {selectedMapel?.nama}
       </p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Pilih Kelas</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>Pilih Kelas</p>
 
       {/* Pilih Tingkat dulu */}
       {!guruPilihTingkat ? (
         <div style={{ width: '100%' }}>
-          <p style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>📚 Pilih Tingkat Kelas:</p>
+          <p style={{ color: '#00c8ff', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>📚 Pilih Tingkat Kelas:</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {['10', '11', '12'].map(tingkat => (
               <button key={tingkat} onClick={() => setGuruPilihTingkat(tingkat)}
@@ -1316,10 +1351,10 @@ function App() {
         <div style={{ width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <button onClick={() => setGuruPilihTingkat(null)}
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid #4fc3f7', color: '#4fc3f7', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>
+              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid #4fc3f7', color: '#00c8ff', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>
               ← Kelas {guruPilihTingkat}
             </button>
-            <p style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '15px', margin: 0 }}>Pilih Jurusan:</p>
+            <p style={{ color: '#00c8ff', fontWeight: 'bold', fontSize: '15px', margin: 0 }}>Pilih Jurusan:</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '8px', width: '100%' }}>
             {['A','B','C','D','E','F','G','H','I','J'].map(j => (
@@ -1346,17 +1381,17 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to={userRole === 'guru' ? 'forumPilihKelas' : 'forum'} />
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
         {selectedMapel?.icon} {selectedMapel?.nama}
       </p>
-      <p style={{ color: '#4fc3f7', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
+      <p style={{ color: '#00c8ff', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
         📚 Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Pilih Bab Pembelajaran</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>Pilih Bab Pembelajaran</p>
       <div style={{ width: '100%' }}>
         {babList.length === 0 && (
-          <div style={{ ...S.card, textAlign: 'center', border: '1px solid #2a5f7a' }}>
-            <p style={{ color: '#aaa', fontSize: '14px' }}>
+          <div style={{ ...S.card, textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
+            <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '14px' }}>
               {userRole === 'guru' ? 'Belum ada bab. Tambahkan bab baru di bawah.' : 'Belum ada materi. Tunggu guru menambahkan bab.'}
             </p>
           </div>
@@ -1397,7 +1432,7 @@ function App() {
                       <span onClick={e => { e.stopPropagation(); setEditBab(b.id); }}
                         style={{ fontSize: '16px', cursor: 'pointer' }}>✏️</span>
                     )}
-                    <span style={{ color: '#4fc3f7', fontSize: '20px' }}>›</span>
+                    <span style={{ color: '#00c8ff', fontSize: '20px' }}>›</span>
                   </div>
                 </button>
             }
@@ -1405,8 +1440,8 @@ function App() {
         ))}
 
         {userRole === 'guru' && (
-          <div style={{ ...S.card, border: '1px solid #27ae60', marginTop: '8px' }}>
-            <p style={{ color: '#27ae60', fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>+ Tambah Bab Baru</p>
+          <div style={{ ...S.card, border: '1px solid rgba(0,200,120,0.3)', marginTop: '8px' }}>
+            <p style={{ color: '#00c878', fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>+ Tambah Bab Baru</p>
             <input style={S.input} placeholder="Contoh: Bab 4 - Persamaan Linear"
               value={babBaru} onChange={e => setBabBaru(e.target.value)} />
             <button onClick={tambahBab}
@@ -1426,14 +1461,14 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumBab" fn={() => { stopTimerModul(); stopTimerVideo(); setPage('forumBab'); }} />
-      <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>{selectedBab?.judul}</p>
-      <p style={{ color: '#4fc3f7', fontSize: '13px', fontWeight: 'bold', marginBottom: '2px' }}>
+      <p style={{ color: '#ffd700', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>{selectedBab?.judul}</p>
+      <p style={{ color: '#00c8ff', fontSize: '13px', fontWeight: 'bold', marginBottom: '2px' }}>
         {selectedMapel?.nama} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
 
       {userRole === 'siswa' && (
-        <div style={{ ...S.card, border: '1px solid #27ae60', marginBottom: '16px' }}>
-          <p style={{ color: '#27ae60', fontWeight: 'bold', fontSize: '13px', margin: 0 }}>
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,120,0.3)', marginBottom: '16px' }}>
+          <p style={{ color: '#00c878', fontWeight: 'bold', fontSize: '13px', margin: 0 }}>
             📊 Poin Modul: {hitungPoinModul()}/50 pts &nbsp;|&nbsp;
             📖 {modulDurasi} mnt &nbsp;|&nbsp; 🎥 {videoDurasi} mnt
           </p>
@@ -1442,8 +1477,8 @@ function App() {
 
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {/* Modul 1 */}
-        <div style={{ ...S.card, border: '1px solid #2a5f7a' }}>
-          <p style={{ color: '#4fc3f7', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran</p>
+        <div style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran</p>
           {userRole === 'siswa'
             ? selectedBab?.modul
               ? <a href={selectedBab.modul} target="_blank" rel="noreferrer"
@@ -1451,7 +1486,7 @@ function App() {
                   style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#1565c0,#0d47a1)' }}>
                   <span style={{ fontSize: '20px' }}>📂</span> Buka Modul
                 </a>
-              : <p style={{ color: '#aaa', fontSize: '13px' }}>Belum ada modul dari guru.</p>
+              : <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px' }}>Belum ada modul dari guru.</p>
             : <div>
                 <input style={S.input} placeholder="Link modul (Google Drive / PDF)..."
                   value={linkEdit.modul} onChange={e => setLinkEdit(p => ({ ...p, modul: e.target.value }))} />
@@ -1464,8 +1499,8 @@ function App() {
         </div>
 
         {/* Modul 2 */}
-        <div style={{ ...S.card, border: '1px solid #2a5f7a' }}>
-          <p style={{ color: '#4fc3f7', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran Lainnya</p>
+        <div style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran Lainnya</p>
           {userRole === 'siswa'
             ? selectedBab?.modul2
               ? <a href={selectedBab.modul2} target="_blank" rel="noreferrer"
@@ -1473,7 +1508,7 @@ function App() {
                   style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#1565c0,#0d47a1)' }}>
                   <span style={{ fontSize: '20px' }}>📂</span> Buka Modul Lainnya
                 </a>
-              : <p style={{ color: '#aaa', fontSize: '13px' }}>Belum ada modul dari guru.</p>
+              : <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px' }}>Belum ada modul dari guru.</p>
             : <div>
                 <input style={S.input} placeholder="Link modul lainnya..."
                   value={linkEdit.modul2} onChange={e => setLinkEdit(p => ({ ...p, modul2: e.target.value }))} />
@@ -1495,7 +1530,7 @@ function App() {
                   style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#c0392b,#922b21)' }}>
                   <span style={{ fontSize: '20px' }}>▶️</span> Tonton Video YouTube
                 </a>
-              : <p style={{ color: '#aaa', fontSize: '13px' }}>Belum ada video dari guru.</p>
+              : <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px' }}>Belum ada video dari guru.</p>
             : <div>
                 <input style={S.input} placeholder="Link YouTube..."
                   value={linkEdit.video} onChange={e => setLinkEdit(p => ({ ...p, video: e.target.value }))} />
@@ -1524,7 +1559,7 @@ function App() {
                   }} style={{ ...S.btnOrange, marginTop: '0' }}>
                   🚀 Mulai Quiz
                 </button>
-              : <p style={{ color: '#aaa', fontSize: '13px' }}>Belum ada soal dari guru.</p>
+              : <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px' }}>Belum ada soal dari guru.</p>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <button onClick={() => setPage('guruBuatQuiz')}
                   style={{ background: '#8e44ad', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
@@ -1555,16 +1590,16 @@ function App() {
         <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
           <TopBar />
           <div style={{ fontSize: '60px', marginBottom: '16px' }}>🎉</div>
-          <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', marginBottom: '16px' }}>Quiz Selesai!</p>
-          <div style={{ ...S.card, border: '1px solid #27ae60', textAlign: 'left', marginBottom: '16px' }}>
-            <p style={{ color: '#2ecc71', fontWeight: 'bold', marginBottom: '8px' }}>📊 Hasil Quiz Kamu:</p>
-            <p style={{ color: '#ccc', fontSize: '14px', margin: '4px 0' }}>
+          <p style={{ color: '#ffd700', fontSize: '22px', fontWeight: '900', marginBottom: '16px' }}>Quiz Selesai!</p>
+          <div style={{ ...S.card, border: '1px solid rgba(0,200,120,0.3)', textAlign: 'left', marginBottom: '16px' }}>
+            <p style={{ color: '#00d278', fontWeight: 'bold', marginBottom: '8px' }}>📊 Hasil Quiz Kamu:</p>
+            <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '14px', margin: '4px 0' }}>
               ✅ Pilihan Ganda: <strong style={{ color: 'white' }}>{poinPG}/20 pts</strong>
             </p>
-            <p style={{ color: '#ccc', fontSize: '14px', margin: '4px 0' }}>
+            <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '14px', margin: '4px 0' }}>
               ✍️ Essay: <strong style={{ color: '#f39c12' }}>Menunggu penilaian guru (maks 30 pts)</strong>
             </p>
-            <p style={{ color: '#ccc', fontSize: '14px', margin: '4px 0' }}>
+            <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '14px', margin: '4px 0' }}>
               📖 Modul + Video: <strong style={{ color: 'white' }}>{hitungPoinModul()}/50 pts</strong>
             </p>
           </div>
@@ -1583,7 +1618,7 @@ function App() {
           <TopBar />
           <div style={{ width: '100%', marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ color: '#aaa', fontSize: '13px' }}>PG {quizSoalIndex + 1}/{pgSoal.length}</span>
+              <span style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px' }}>PG {quizSoalIndex + 1}/{pgSoal.length}</span>
               <span style={{ color: warnaTimer, fontSize: '15px', fontWeight: 'bold' }}>⏱️ {timer}s</span>
             </div>
             <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px' }}>
@@ -1593,7 +1628,7 @@ function App() {
               <div style={{ height: '4px', background: warnaTimer, borderRadius: '3px', width: `${persen}%`, transition: 'width 1s linear' }} />
             </div>
           </div>
-          <div style={{ ...S.card, border: '1px solid #2a5f7a', marginBottom: '16px' }}>
+          <div style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)', marginBottom: '16px' }}>
             <p style={{ fontSize: '16px', fontWeight: '600', lineHeight: '1.6', margin: 0 }}>📌 {soal.soal}</p>
           </div>
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1635,7 +1670,7 @@ function App() {
           <TopBar />
           <div style={{ width: '100%', marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ color: '#aaa', fontSize: '13px' }}>Essay {essayIndex + 1}/{essaySoal.length}</span>
+              <span style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px' }}>Essay {essayIndex + 1}/{essaySoal.length}</span>
               <span style={{ color: '#f39c12', fontSize: '13px', fontWeight: 'bold' }}>✍️ Tidak ada timer</span>
             </div>
             <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px' }}>
@@ -1665,7 +1700,7 @@ function App() {
       <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
         <TopBar />
         <div style={{ fontSize: '60px', marginBottom: '16px' }}>✅</div>
-        <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900' }}>Semua soal selesai!</p>
+        <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900' }}>Semua soal selesai!</p>
         <button onClick={() => setQuizSelesai(true)} style={{ ...S.btnOrange, marginTop: '16px' }}>
           Lihat Hasil →
         </button>
@@ -1680,19 +1715,19 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumIsiBab" />
-      <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>Buat / Edit Soal Quiz</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>{selectedMapel?.nama} — {selectedBab?.judul}</p>
+      <p style={{ color: '#ffd700', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>Buat / Edit Soal Quiz</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>{selectedMapel?.nama} — {selectedBab?.judul}</p>
 
       {quizSoalList.length === 0 && (
-        <div style={{ ...S.card, textAlign: 'center', border: '1px solid #2a5f7a' }}>
-          <p style={{ color: '#aaa', fontSize: '14px' }}>Belum ada soal. Tambahkan di bawah.</p>
+        <div style={{ ...S.card, textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
+          <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '14px' }}>Belum ada soal. Tambahkan di bawah.</p>
         </div>
       )}
 
       {quizSoalList.map((q, i) => (
-        <div key={q.id} style={{ ...S.card, border: '1px solid #2a5f7a' }}>
+        <div key={q.id} style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ color: '#4fc3f7', fontWeight: 'bold', fontSize: '14px' }}>
+            <span style={{ color: '#00c8ff', fontWeight: 'bold', fontSize: '14px' }}>
               Soal {i + 1} — {q.tipe === 'pg' ? 'Pilihan Ganda' : 'Essay'}
             </span>
             <button onClick={() => hapusSoal(q.id)}
@@ -1700,7 +1735,7 @@ function App() {
               🗑️
             </button>
           </div>
-          <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>{q.soal}</p>
+          <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '14px', lineHeight: '1.5' }}>{q.soal}</p>
           {q.tipe === 'pg' && (
             <div>
               {q.opsi.map((op, j) => (
@@ -1708,7 +1743,7 @@ function App() {
                   {op[0] === q.kunci ? '✅ ' : ''}{op}
                 </p>
               ))}
-              <p style={{ color: '#f0e000', fontSize: '12px', marginTop: '4px' }}>Kunci: {q.kunci}</p>
+              <p style={{ color: '#ffd700', fontSize: '12px', marginTop: '4px' }}>Kunci: {q.kunci}</p>
             </div>
           )}
         </div>
@@ -1754,8 +1789,8 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumIsiBab" />
-      <p style={{ color: '#f0e000', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>Hasil Siswa</p>
-      <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '16px' }}>
+      <p style={{ color: '#ffd700', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>Hasil Siswa</p>
+      <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px', marginBottom: '16px' }}>
         {selectedMapel?.nama} — {selectedBab?.judul} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
 
@@ -1778,21 +1813,21 @@ function App() {
       </div>
 
       {hasilSiswa.length === 0 && (
-        <div style={{ ...S.card, textAlign: 'center', border: '1px solid #2a5f7a' }}>
-          <p style={{ color: '#aaa', fontSize: '14px' }}>Belum ada siswa yang mengerjakan quiz.</p>
+        <div style={{ ...S.card, textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
+          <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '14px' }}>Belum ada siswa yang mengerjakan quiz.</p>
         </div>
       )}
 
       {lihatTab === 'pg' && hasilSiswa.map((s, i) => (
-        <div key={i} style={{ ...S.card, border: '1px solid #2a5f7a' }}>
+        <div key={i} style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '15px' }}>{s.siswaNama}</p>
-              <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}>Kelas {s.siswaKelas}</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', margin: 0 }}>Kelas {s.siswaKelas}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ color: '#2ecc71', fontWeight: 'bold', margin: 0 }}>{s.poinPG}/20 pts</p>
-              <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>{s.poinPG >= 12 ? '✅ Lulus' : '❌ Remedial'}</p>
+              <p style={{ color: '#00d278', fontWeight: 'bold', margin: 0 }}>{s.poinPG}/20 pts</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: 0 }}>{s.poinPG >= 12 ? '✅ Lulus' : '❌ Remedial'}</p>
             </div>
           </div>
           <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', marginTop: '10px' }}>
@@ -1804,19 +1839,19 @@ function App() {
       {lihatTab === 'essay' && hasilSiswa.map((s, i) => (
         <div key={i} style={{ ...S.card, border: '1px solid #f39c12' }}>
           <p style={{ fontWeight: 'bold', margin: '0 0 4px', fontSize: '15px' }}>{s.siswaNama}</p>
-          <p style={{ color: '#aaa', fontSize: '12px', margin: '0 0 10px' }}>Kelas {s.siswaKelas}</p>
+          <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', margin: '0 0 10px' }}>Kelas {s.siswaKelas}</p>
           {s.essayJawaban?.map((ej, j) => (
             <div key={j} style={{ marginBottom: '10px' }}>
               <p style={{ color: '#f39c12', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px' }}>Soal: {ej.soal}</p>
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px', marginBottom: '6px' }}>
-                <p style={{ color: '#ccc', fontSize: '13px', margin: 0, lineHeight: '1.6' }}>
+                <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '13px', margin: 0, lineHeight: '1.6' }}>
                   {ej.jawaban || <span style={{ color: '#555' }}>Tidak dijawab</span>}
                 </p>
               </div>
             </div>
           ))}
           {s.nilaiEssay !== null && s.nilaiEssay !== undefined
-            ? <p style={{ color: '#2ecc71', fontWeight: 'bold', fontSize: '14px' }}>✅ Nilai Essay: {s.nilaiEssay}/100</p>
+            ? <p style={{ color: '#00d278', fontWeight: 'bold', fontSize: '14px' }}>✅ Nilai Essay: {s.nilaiEssay}/100</p>
             : <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input style={{ ...S.input, marginBottom: '0', flex: 1 }}
                   type="number" placeholder="Nilai 0-100" min="0" max="100"
@@ -1832,20 +1867,20 @@ function App() {
       ))}
 
       {lihatTab === 'modul' && hasilSiswa.map((s, i) => (
-        <div key={i} style={{ ...S.card, border: '1px solid #2a5f7a' }}>
+        <div key={i} style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)' }}>
           <p style={{ fontWeight: 'bold', margin: '0 0 4px', fontSize: '15px' }}>{s.siswaNama}</p>
-          <p style={{ color: '#aaa', fontSize: '12px', margin: '0 0 10px' }}>Kelas {s.siswaKelas}</p>
+          <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '12px', margin: '0 0 10px' }}>Kelas {s.siswaKelas}</p>
           <div style={{ display: 'flex', gap: '12px' }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <p style={{ color: '#4fc3f7', fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{s.modulDurasi} mnt</p>
-              <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>Baca Modul</p>
+              <p style={{ color: '#00c8ff', fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{s.modulDurasi} mnt</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: 0 }}>Baca Modul</p>
               <p style={{ color: s.modulDurasi >= 120 ? '#2ecc71' : '#e74c3c', fontSize: '11px', margin: 0 }}>
                 {s.modulDurasi >= 120 ? '✅ Tercapai' : '❌ Kurang 2 jam'}
               </p>
             </div>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
               <p style={{ color: '#e74c3c', fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{s.videoDurasi} mnt</p>
-              <p style={{ color: '#aaa', fontSize: '11px', margin: 0 }}>Tonton Video</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '11px', margin: 0 }}>Tonton Video</p>
               <p style={{ color: s.videoDurasi >= 10 ? '#2ecc71' : '#e74c3c', fontSize: '11px', margin: 0 }}>
                 {s.videoDurasi >= 10 ? '✅ Tercapai' : '❌ Kurang 10 mnt'}
               </p>
@@ -1864,8 +1899,8 @@ function App() {
       <TopBar />
       <BackBtn to="menuSiswa" />
       <img src="/bbb.png" alt="E-JULU" style={{ height: '60px', marginBottom: '12px' }} />
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>REGISTRASI SISWA</p>
-      <p style={{ color: '#ccc', fontSize: '13px', marginBottom: '20px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>REGISTRASI SISWA</p>
+      <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '13px', marginBottom: '20px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
       {siswaError && <div style={S.errBox}>⚠️ {siswaError}</div>}
       <div style={{ width: '100%' }}>
         <label style={S.label}>NISN *</label>
@@ -1927,11 +1962,11 @@ function App() {
         <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Ceritakan sedikit tentang dirimu..."
           value={siswaForm.bio} onChange={e => updateSiswaForm('bio', e.target.value)} />
         <label style={S.label}>FOTO SELFIE (Opsional)</label>
-        <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '16px', marginBottom: '14px', textAlign: 'center', border: '1px solid #2a5f7a' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '16px', marginBottom: '14px', textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
           {!cameraActive && !fotoDiambil && (
             <div>
               <div style={{ fontSize: '40px', marginBottom: '6px' }}>📷</div>
-              <p style={{ color: '#aaa', fontSize: '13px', margin: '0 0 10px' }}>Opsional — bisa dilewati</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px', margin: '0 0 10px' }}>Opsional — bisa dilewati</p>
               <button onClick={startKameraSiswa}
                 style={{ background: '#1565c0', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
                 📸 AKTIFKAN KAMERA
@@ -1950,7 +1985,7 @@ function App() {
           <canvas ref={canvasRef} style={{ width: '100%', borderRadius: '8px', display: fotoDiambil ? 'block' : 'none', marginBottom: '10px' }} />
           {fotoDiambil && (
             <div>
-              <p style={{ color: '#2ecc71', fontWeight: 'bold', fontSize: '14px', margin: '0 0 8px' }}>✅ Foto berhasil!</p>
+              <p style={{ color: '#00d278', fontWeight: 'bold', fontSize: '14px', margin: '0 0 8px' }}>✅ Foto berhasil!</p>
               <button onClick={() => { setFotoDiambil(false); startKameraSiswa(); }}
                 style={{ background: '#e07b00', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '13px' }}>
                 🔄 Ambil Ulang
@@ -1973,8 +2008,8 @@ function App() {
       <TopBar />
       <BackBtn to="menuGuru" />
       <img src="/bbb.png" alt="E-JULU" style={{ height: '60px', marginBottom: '12px' }} />
-      <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>REGISTRASI GURU</p>
-      <p style={{ color: '#ccc', fontSize: '13px', marginBottom: '20px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>REGISTRASI GURU</p>
+      <p style={{ color: 'rgba(200,220,255,0.65)', fontSize: '13px', marginBottom: '20px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
       {guruError && <div style={S.errBox}>⚠️ {guruError}</div>}
       <div style={{ width: '100%' }}>
         <label style={S.label}>NIP (Guru PNS) — isi salah satu</label>
@@ -2019,11 +2054,11 @@ function App() {
         <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Ceritakan sedikit tentang diri Anda sebagai pendidik..."
           value={guruForm.bio} onChange={e => updateGuruForm('bio', e.target.value)} />
         <label style={S.label}>FOTO PROFIL (Opsional)</label>
-        <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '16px', marginBottom: '14px', textAlign: 'center', border: '1px solid #2a5f7a' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '16px', marginBottom: '14px', textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
           {!cameraGuruActive && !fotoGuruDiambil && (
             <div>
               <div style={{ fontSize: '40px', marginBottom: '6px' }}>📷</div>
-              <p style={{ color: '#aaa', fontSize: '13px', margin: '0 0 10px' }}>Opsional — bisa dilewati</p>
+              <p style={{ color: 'rgba(160,200,230,0.5)', fontSize: '13px', margin: '0 0 10px' }}>Opsional — bisa dilewati</p>
               <button onClick={startKameraGuru}
                 style={{ background: '#1565c0', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
                 📸 AKTIFKAN KAMERA
@@ -2042,7 +2077,7 @@ function App() {
           <canvas ref={canvasGuruRef} style={{ width: '100%', borderRadius: '8px', display: fotoGuruDiambil ? 'block' : 'none', marginBottom: '10px' }} />
           {fotoGuruDiambil && (
             <div>
-              <p style={{ color: '#2ecc71', fontWeight: 'bold', fontSize: '14px', margin: '0 0 8px' }}>✅ Foto berhasil!</p>
+              <p style={{ color: '#00d278', fontWeight: 'bold', fontSize: '14px', margin: '0 0 8px' }}>✅ Foto berhasil!</p>
               <button onClick={() => { setFotoGuruDiambil(false); startKameraGuru(); }}
                 style={{ background: '#e07b00', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '13px' }}>
                 🔄 Ambil Ulang
