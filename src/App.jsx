@@ -36,8 +36,9 @@ function App() {
     agama:'', password:'', konfirmasi:'', kelas:'',
     jurusan:'', citaCita:'', hobby:'', bio:''
   });
+  // FIX 1: Tambah field nip dan nik di guruForm agar tidak crash
   const [guruForm, setGuruForm] = useState({
-    nip:'', nama:'', namaPanggilan:'', mapel:'',
+    nip:'', nik:'', nama:'', namaPanggilan:'', mapel:'',
     jabatan:'', email:'', password:'', konfirmasi:'', bio:''
   });
   const [siswaError, setSiswaError] = useState('');
@@ -61,6 +62,9 @@ function App() {
   const [quizSoalAcak, setQuizSoalAcak] = useState([]);
   const [timer, setTimer] = useState(20);
   const timerRef = useRef(null);
+
+  // FIX 2: Tambah flag untuk mencegah simpanHasilQuiz dipanggil berulang
+  const hasilTersimpan = useRef(false);
 
   // Durasi
   const [modulDurasi, setModulDurasi] = useState(0);
@@ -104,19 +108,29 @@ function App() {
   // ── Auth listener ─────────────────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if(user) {
-        const docSnap = await getDoc(doc(db, 'users', user.uid));
-        if(docSnap.exists()) {
-          const data = docSnap.data();
-          if(data.status === 'approved') {
-            setUserData(data);
-            setUserRole(data.role);
-            setPage('dashboard');
-          } else if(data.status === 'pending') {
-            setPage('menunggu');
+      if (user) {
+        try {
+          const docSnap = await getDoc(doc(db, 'users', user.uid));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.status === 'approved') {
+              setUserData(data);
+              setUserRole(data.role);
+              setPage('dashboard');
+            } else if (data.status === 'pending') {
+              setPage('menunggu');
+            } else {
+              setPage('ditolak');
+            }
           } else {
-            setPage('ditolak');
+            // FIX 3: Jika dokumen user tidak ada di Firestore, sign out dan ke halaman role
+            await signOut(auth);
+            setPage('role');
           }
+        } catch (err) {
+          console.error('Auth listener error:', err);
+          await signOut(auth);
+          setPage('role');
         }
       }
       setAuthReady(true);
@@ -127,7 +141,7 @@ function App() {
   // ── Deteksi keluar saat quiz ───────────────────────────────────
   useEffect(() => {
     const handleVisibility = () => {
-      if(document.hidden && page === 'quiz') {
+      if (document.hidden && page === 'quiz') {
         clearInterval(timerRef.current);
         setPage('loginSiswa');
         setQuizJawaban({});
@@ -141,14 +155,14 @@ function App() {
 
   // ── Timer quiz ────────────────────────────────────────────────
   useEffect(() => {
-    if(page === 'quiz' && !quizSelesai) {
+    if (page === 'quiz' && !quizSelesai) {
       const pgSoal = quizSoalAcak.filter(s => s.tipe === 'pg');
-      if(quizSoalIndex >= pgSoal.length) return;
+      if (quizSoalIndex >= pgSoal.length) return;
       setTimer(20);
       clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setTimer(prev => {
-          if(prev <= 1) {
+          if (prev <= 1) {
             clearInterval(timerRef.current);
             handleNextSoal(true);
             return 20;
@@ -163,7 +177,7 @@ function App() {
   const handleNextSoal = (timeout = false) => {
     clearInterval(timerRef.current);
     const pgSoal = quizSoalAcak.filter(s => s.tipe === 'pg');
-    if(quizSoalIndex < pgSoal.length - 1) {
+    if (quizSoalIndex < pgSoal.length - 1) {
       setQuizSoalIndex(i => i + 1);
     } else {
       setQuizSoalIndex(pgSoal.length);
@@ -211,7 +225,7 @@ function App() {
 
   const hitungPoinPG = () => {
     const pgSoal = quizSoalAcak.filter(s => s.tipe === 'pg');
-    if(!pgSoal.length) return 0;
+    if (!pgSoal.length) return 0;
     const benar = pgSoal.filter(s => quizJawaban[s.id] === s.kunci).length;
     return Math.round((benar / pgSoal.length) * 20);
   };
@@ -223,31 +237,43 @@ function App() {
   };
 
   // ── Simpan hasil quiz ke Firestore ─────────────────────────────
+  // FIX 4: Tidak lagi dipanggil saat render — dipanggil saat quizSelesai berubah jadi true
+  useEffect(() => {
+    if (quizSelesai && !hasilTersimpan.current) {
+      hasilTersimpan.current = true;
+      simpanHasilQuiz();
+    }
+  }, [quizSelesai]);
+
   const simpanHasilQuiz = async () => {
-    if(!userData || !selectedBab) return;
+    if (!userData || !selectedBab) return;
     const poinPG = hitungPoinPG();
     const essayJawaban = quizSoalAcak
       .filter(s => s.tipe === 'essay')
       .map(s => ({ soalId: s.id, soal: s.soal, jawaban: quizJawaban[s.id] || '' }));
 
-    await addDoc(collection(db, 'hasilQuiz'), {
-      babId: selectedBab.id,
-      mapel: selectedMapel.nama,
-      siswaId: userData.uid,
-      siswaNama: userData.nama,
-      siswaKelas: `${userData.kelas}-${userData.jurusan}`,
-      poinPG,
-      essayJawaban,
-      nilaiEssay: null,
-      modulDurasi,
-      videoDurasi,
-      timestamp: new Date()
-    });
+    try {
+      await addDoc(collection(db, 'hasilQuiz'), {
+        babId: selectedBab.id,
+        mapel: selectedMapel.nama,
+        siswaId: userData.uid,
+        siswaNama: userData.nama,
+        siswaKelas: `${userData.kelas}-${userData.jurusan}`,
+        poinPG,
+        essayJawaban,
+        nilaiEssay: null,
+        modulDurasi,
+        videoDurasi,
+        timestamp: new Date()
+      });
 
-    await updateDoc(doc(db, 'users', userData.uid), {
-      poinPG: (userData.poinPG || 0) + poinPG,
-      poinModul: hitungPoinModul()
-    });
+      await updateDoc(doc(db, 'users', userData.uid), {
+        poinPG: (userData.poinPG || 0) + poinPG,
+        poinModul: hitungPoinModul()
+      });
+    } catch (err) {
+      console.error('Gagal simpan hasil quiz:', err);
+    }
   };
 
   // ── Kamera ────────────────────────────────────────────────────
@@ -293,23 +319,20 @@ function App() {
   const updateGuruForm = (k, v) => setGuruForm(p => ({ ...p, [k]: v }));
 
   // ── Registrasi Siswa ───────────────────────────────────────────
-  // ── Registrasi Siswa (Versi Opsional) ───────────────────────────
   const registrasiSiswa = async () => {
     const f = siswaForm;
-    // Validasi hanya untuk teks, tidak mengecek foto sama sekali
-    if(!f.nisn||!f.nama||!f.tglLahir||!f.email||!f.telpon||!f.agama||
-       !f.password||!f.konfirmasi||!f.kelas||!f.jurusan||!f.citaCita||!f.hobby||!f.bio) {
+    if (!f.nisn||!f.nama||!f.tglLahir||!f.email||!f.telpon||!f.agama||
+        !f.password||!f.konfirmasi||!f.kelas||!f.jurusan||!f.citaCita||!f.hobby||!f.bio) {
       setSiswaError('Semua field wajib diisi!'); return;
     }
-    if(f.password !== f.konfirmasi) { setSiswaError('Password tidak cocok!'); return; }
-    if(f.password.length < 6) { setSiswaError('Password minimal 6 karakter!'); return; }
-    
+    if (f.password !== f.konfirmasi) { setSiswaError('Password tidak cocok!'); return; }
+    if (f.password.length < 6) { setSiswaError('Password minimal 6 karakter!'); return; }
+
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, f.email, f.password);
-      // Foto dipaksa kosong dan tidak dicek apakah sudah diambil atau belum
-      const fotoUrl = fotoDataUrl || ''; 
-      
+      const fotoUrl = fotoDataUrl || '';
+
       await setDoc(doc(db, 'users', cred.user.uid), {
         uid: cred.user.uid, role: 'siswa', status: 'pending',
         nisn: f.nisn, nama: f.nama, tglLahir: f.tglLahir,
@@ -322,7 +345,7 @@ function App() {
       await signOut(auth);
       setSiswaError('');
       setPage('menunggu');
-    } catch(e) {
+    } catch (e) {
       setSiswaError(e.message.includes('email-already-in-use')
         ? 'Email sudah terdaftar!' : 'Gagal mendaftar: ' + e.message);
     }
@@ -332,18 +355,20 @@ function App() {
   // ── Registrasi Guru ────────────────────────────────────────────
   const registrasiGuru = async () => {
     const f = guruForm;
-    if(!f.nama||!f.namaPanggilan||!f.mapel||!f.jabatan||
-       !f.email||!f.password||!f.konfirmasi||!f.bio) {
+    if (!f.nama||!f.namaPanggilan||!f.mapel||!f.jabatan||
+        !f.email||!f.password||!f.konfirmasi||!f.bio) {
       setGuruError('Semua field wajib diisi!'); return;
     }
-    if(!f.nip && !f.nik) { setGuruError('NIP atau NIK wajib diisi!'); return; }
-    if(f.password !== f.konfirmasi) { setGuruError('Password tidak cocok!'); return; }
-    if(f.password.length < 6) { setGuruError('Password minimal 6 karakter!'); return; }
+    // FIX 5: Cek nip/nik dengan benar (kedua field sudah ada di state)
+    if (!f.nip && !f.nik) { setGuruError('NIP atau NIK wajib diisi!'); return; }
+    if (f.password !== f.konfirmasi) { setGuruError('Password tidak cocok!'); return; }
+    if (f.password.length < 6) { setGuruError('Password minimal 6 karakter!'); return; }
+
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, f.email, f.password);
-      let fotoUrl = '';
-      
+      const fotoUrl = fotoGuruDataUrl || '';
+
       await setDoc(doc(db, 'users', cred.user.uid), {
         uid: cred.user.uid, role: 'guru', status: 'pending',
         nip: f.nip || '', nik: f.nik || '',
@@ -356,7 +381,7 @@ function App() {
       await signOut(auth);
       setGuruError('');
       setPage('menunggu');
-    } catch(e) {
+    } catch (e) {
       setGuruError(e.message.includes('email-already-in-use')
         ? 'Email sudah terdaftar!' : 'Gagal mendaftar: ' + e.message);
     }
@@ -365,7 +390,7 @@ function App() {
 
   // ── Login Siswa ────────────────────────────────────────────────
   const loginSiswa = async () => {
-    if(!siswaLoginNISN || !siswaLoginPassword) {
+    if (!siswaLoginNISN || !siswaLoginPassword) {
       setLoginError('NISN dan password wajib diisi!'); return;
     }
     setLoading(true);
@@ -375,19 +400,19 @@ function App() {
         where('nisn', '==', siswaLoginNISN),
         where('role', '==', 'siswa'));
       const snap = await getDocs(q);
-      if(snap.empty) { setLoginError('NISN tidak ditemukan!'); setLoading(false); return; }
+      if (snap.empty) { setLoginError('NISN tidak ditemukan!'); setLoading(false); return; }
       const siswaData = snap.docs[0].data();
-      if(siswaData.status === 'pending') {
+      if (siswaData.status === 'pending') {
         setLoginError('Akun belum disetujui admin!'); setLoading(false); return;
       }
-      if(siswaData.status === 'rejected') {
+      if (siswaData.status === 'rejected') {
         setLoginError('Akun ditolak. Hubungi admin sekolah.'); setLoading(false); return;
       }
       await signInWithEmailAndPassword(auth, siswaData.email, siswaLoginPassword);
       setUserData(siswaData);
       setUserRole('siswa');
       setPage('dashboard');
-    } catch(e) {
+    } catch (e) {
       setLoginError('Password salah!');
     }
     setLoading(false);
@@ -395,32 +420,31 @@ function App() {
 
   // ── Login Guru ─────────────────────────────────────────────────
   const loginGuru = async () => {
-    if(!guruLoginNIP || !guruLoginPassword) {
+    if (!guruLoginNIP || !guruLoginPassword) {
       setLoginError('NIP/NIK dan password wajib diisi!'); return;
     }
     setLoading(true);
     setLoginError('');
     try {
-      const q = query(collection(db, 'users'),
-        where('role', '==', 'guru'));
+      const q = query(collection(db, 'users'), where('role', '==', 'guru'));
       const snap = await getDocs(q);
       const guruDoc = snap.docs.find(d => {
         const data = d.data();
         return data.nip === guruLoginNIP || data.nik === guruLoginNIP;
       });
-      if(!guruDoc) { setLoginError('NIP/NIK tidak ditemukan!'); setLoading(false); return; }
+      if (!guruDoc) { setLoginError('NIP/NIK tidak ditemukan!'); setLoading(false); return; }
       const guruData = guruDoc.data();
-      if(guruData.status === 'pending') {
+      if (guruData.status === 'pending') {
         setLoginError('Akun belum disetujui admin!'); setLoading(false); return;
       }
-      if(guruData.status === 'rejected') {
+      if (guruData.status === 'rejected') {
         setLoginError('Akun ditolak. Hubungi admin sekolah.'); setLoading(false); return;
       }
       await signInWithEmailAndPassword(auth, guruData.email, guruLoginPassword);
       setUserData(guruData);
       setUserRole('guru');
       setPage('dashboard');
-    } catch(e) {
+    } catch (e) {
       setLoginError('Password salah!');
     }
     setLoading(false);
@@ -431,18 +455,23 @@ function App() {
     await signOut(auth);
     setUserData(null);
     setUserRole(null);
+    // FIX 6: Reset loginError saat logout agar tidak muncul lagi
+    setLoginError('');
     setPage('role');
   };
 
   // ── Tambah Bab ─────────────────────────────────────────────────
   const tambahBab = async () => {
-    if(!babBaru.trim()) return;
+    if (!babBaru.trim()) return;
     const docRef = await addDoc(collection(db, 'bab'), {
       mapel: selectedMapel.nama, judul: babBaru,
       modul: '', modul2: '', video: '',
       urutan: babList.length + 1, createdAt: new Date()
     });
-    setBabList(prev => [...prev, { id: docRef.id, mapel: selectedMapel.nama, judul: babBaru, modul: '', modul2: '', video: '', urutan: babList.length + 1 }]);
+    setBabList(prev => [...prev, {
+      id: docRef.id, mapel: selectedMapel.nama, judul: babBaru,
+      modul: '', modul2: '', video: '', urutan: babList.length + 1
+    }]);
     setBabBaru('');
   };
 
@@ -465,7 +494,7 @@ function App() {
 
   // ── Tambah/Hapus Soal ──────────────────────────────────────────
   const tambahSoalPG = async () => {
-    if(!soalBaru.soal.trim()) return;
+    if (!soalBaru.soal.trim()) return;
     const docRef = await addDoc(collection(db, 'soal'), {
       babId: selectedBab.id, mapel: selectedMapel.nama,
       tipe: 'pg', soal: soalBaru.soal,
@@ -477,7 +506,7 @@ function App() {
   };
 
   const tambahSoalEssay = async () => {
-    if(!essayBaru.trim()) return;
+    if (!essayBaru.trim()) return;
     const docRef = await addDoc(collection(db, 'soal'), {
       babId: selectedBab.id, mapel: selectedMapel.nama,
       tipe: 'essay', soal: essayBaru, opsi: [], kunci: '',
@@ -590,7 +619,7 @@ function App() {
   );
 
   const BackBtn = ({ to, fn }) => (
-    <button style={S.btnBack} onClick={() => { if(fn) fn(); else setPage(to); }}>← Kembali</button>
+    <button style={S.btnBack} onClick={() => { if (fn) fn(); else setPage(to); }}>← Kembali</button>
   );
 
   const PwInput = ({ placeholder, val, setVal, show, setShow }) => (
@@ -609,7 +638,7 @@ function App() {
     </div>
   );
 
-  if(!authReady) return (
+  if (!authReady) return (
     <div style={{ ...S.page, justifyContent: 'center' }}>
       <TopBar />
       <LoadingSpinner />
@@ -619,7 +648,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // SPLASH
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'splash') return (
+  if (page === 'splash') return (
     <div style={S.page}>
       <TopBar />
       <img src="/bbb.png" alt="E-JULU" style={{ height: '64px', marginBottom: '12px' }} />
@@ -641,7 +670,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // MENUNGGU & DITOLAK
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'menunggu') return (
+  if (page === 'menunggu') return (
     <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
       <TopBar />
       <div style={{ fontSize: '64px', marginBottom: '16px' }}>⏳</div>
@@ -659,7 +688,7 @@ function App() {
     </div>
   );
 
-  if(page === 'ditolak') return (
+  if (page === 'ditolak') return (
     <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
       <TopBar />
       <div style={{ fontSize: '64px', marginBottom: '16px' }}>❌</div>
@@ -675,7 +704,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // PILIH ROLE
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'role') return (
+  if (page === 'role') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="splash" />
@@ -693,7 +722,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // MENU SISWA & GURU
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'menuSiswa') return (
+  if (page === 'menuSiswa') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="role" />
@@ -701,7 +730,7 @@ function App() {
       <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', textAlign: 'center' }}>MENU AKSES SISWA</p>
       <p style={{ color: '#ccc', fontSize: '13px', marginBottom: '24px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
       <img src="/logo_sekolah.png" alt="Logo" style={{ width: '155px', marginBottom: '32px' }} />
-      <button style={S.btnTeal} onClick={() => setPage('loginSiswa')}>
+      <button style={S.btnTeal} onClick={() => { setLoginError(''); setPage('loginSiswa'); }}>
         <span style={{ fontSize: '28px' }}>👤</span><span>LOGIN SISWA</span>
       </button>
       <button style={S.btnGold} onClick={() => setPage('registerSiswa')}>
@@ -710,7 +739,7 @@ function App() {
     </div>
   );
 
-  if(page === 'menuGuru') return (
+  if (page === 'menuGuru') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="role" />
@@ -718,7 +747,7 @@ function App() {
       <p style={{ color: '#f0e000', fontSize: '22px', fontWeight: '900', textAlign: 'center' }}>MENU AKSES GURU</p>
       <p style={{ color: '#ccc', fontSize: '13px', marginBottom: '24px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
       <img src="/logo_sekolah.png" alt="Logo" style={{ width: '155px', marginBottom: '32px' }} />
-      <button style={S.btnTeal} onClick={() => setPage('loginGuru')}>
+      <button style={S.btnTeal} onClick={() => { setLoginError(''); setPage('loginGuru'); }}>
         <span style={{ fontSize: '28px' }}>👨‍🏫</span><span>LOGIN GURU</span>
       </button>
       <button style={S.btnGold} onClick={() => setPage('registerGuru')}>
@@ -730,7 +759,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // LOGIN SISWA & GURU
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'loginSiswa') return (
+  if (page === 'loginSiswa') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="menuSiswa" />
@@ -761,7 +790,7 @@ function App() {
     </div>
   );
 
-  if(page === 'loginGuru') return (
+  if (page === 'loginGuru') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="menuGuru" />
@@ -795,7 +824,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // DASHBOARD
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'dashboard') return (
+  if (page === 'dashboard') return (
     <div style={S.page}>
       <TopBar />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'rgba(255,255,255,0.07)', borderRadius: '12px', padding: '12px 20px', marginBottom: '24px' }}>
@@ -832,7 +861,7 @@ function App() {
         { label: 'Ujian Sekolah',        icon: '📋', warna: '#922b21', to: '' },
         { label: 'Pesan Notifikasi',     icon: '🔔', warna: '#2980b9', to: '' },
       ].map((m, i) => (
-        <button key={i} onClick={() => { if(m.to) setPage(m.to); }}
+        <button key={i} onClick={() => { if (m.to) setPage(m.to); }}
           style={{
             width: '100%', padding: '18px 24px', borderRadius: '30px', border: 'none',
             background: `linear-gradient(135deg,${m.warna},${m.warna}bb)`,
@@ -855,7 +884,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // FORUM — PILIH MAPEL
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'forum') return (
+  if (page === 'forum') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
@@ -867,7 +896,7 @@ function App() {
           return (
             <button key={m.id}
               onClick={() => {
-                if(!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
+                if (!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
                 setSelectedMapel(m);
                 loadBab(m.nama);
                 setPage('forumBab');
@@ -896,7 +925,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // FORUM — DAFTAR BAB
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'forumBab') return (
+  if (page === 'forumBab') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forum" />
@@ -973,7 +1002,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // FORUM — ISI BAB
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'forumIsiBab') return (
+  if (page === 'forumIsiBab') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumBab" fn={() => { stopTimerModul(); stopTimerVideo(); setPage('forumBab'); }} />
@@ -996,7 +1025,7 @@ function App() {
           {userRole === 'siswa'
             ? selectedBab?.modul
               ? <a href={selectedBab.modul} target="_blank" rel="noreferrer"
-                  onClick={() => { if(!modulTimerRef.current) mulaiTimerModul(); }}
+                  onClick={() => { if (!modulTimerRef.current) mulaiTimerModul(); }}
                   style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#1565c0,#0d47a1)' }}>
                   <span style={{ fontSize: '20px' }}>📂</span> Buka Modul
                 </a>
@@ -1018,7 +1047,7 @@ function App() {
           {userRole === 'siswa'
             ? selectedBab?.modul2
               ? <a href={selectedBab.modul2} target="_blank" rel="noreferrer"
-                  onClick={() => { if(!modulTimerRef.current) mulaiTimerModul(); }}
+                  onClick={() => { if (!modulTimerRef.current) mulaiTimerModul(); }}
                   style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#1565c0,#0d47a1)' }}>
                   <span style={{ fontSize: '20px' }}>📂</span> Buka Modul Lainnya
                 </a>
@@ -1040,7 +1069,7 @@ function App() {
           {userRole === 'siswa'
             ? selectedBab?.video
               ? <a href={selectedBab.video} target="_blank" rel="noreferrer"
-                  onClick={() => { if(!videoTimerRef.current) mulaiTimerVideo(); }}
+                  onClick={() => { if (!videoTimerRef.current) mulaiTimerVideo(); }}
                   style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#c0392b,#922b21)' }}>
                   <span style={{ fontSize: '20px' }}>▶️</span> Tonton Video YouTube
                 </a>
@@ -1062,6 +1091,7 @@ function App() {
           {userRole === 'siswa'
             ? quizSoalList.length > 0
               ? <button onClick={() => {
+                    hasilTersimpan.current = false; // reset flag sebelum quiz baru
                     const acak = acakSoal(quizSoalList);
                     setQuizSoalAcak(acak);
                     setQuizSoalIndex(0);
@@ -1092,13 +1122,13 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // QUIZ SISWA
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'quiz') {
+  if (page === 'quiz') {
     const pgSoal = quizSoalAcak.filter(s => s.tipe === 'pg');
     const essaySoal = quizSoalAcak.filter(s => s.tipe === 'essay');
 
-    if(quizSelesai) {
+    // FIX 7: Halaman hasil quiz — tidak lagi memanggil simpanHasilQuiz() di sini
+    if (quizSelesai) {
       const poinPG = hitungPoinPG();
-      simpanHasilQuiz();
       return (
         <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
           <TopBar />
@@ -1121,7 +1151,7 @@ function App() {
       );
     }
 
-    if(quizSoalIndex < pgSoal.length) {
+    if (quizSoalIndex < pgSoal.length) {
       const soal = pgSoal[quizSoalIndex];
       const persen = (timer / 20) * 100;
       const warnaTimer = timer > 10 ? '#2ecc71' : timer > 5 ? '#f39c12' : '#e74c3c';
@@ -1175,7 +1205,7 @@ function App() {
     }
 
     const essayIndex = quizSoalIndex - pgSoal.length;
-    if(essayIndex < essaySoal.length) {
+    if (essayIndex < essaySoal.length) {
       const soal = essaySoal[essayIndex];
       return (
         <div style={{ ...S.page, userSelect: 'none', WebkitUserSelect: 'none' }}
@@ -1199,7 +1229,7 @@ function App() {
             onChange={e => setQuizJawaban(prev => ({ ...prev, [soal.id]: e.target.value }))}
           />
           <button onClick={() => {
-            if(essayIndex < essaySoal.length - 1) setQuizSoalIndex(i => i + 1);
+            if (essayIndex < essaySoal.length - 1) setQuizSoalIndex(i => i + 1);
             else setQuizSelesai(true);
           }} style={{ ...S.btnOrange, marginTop: '16px' }}>
             {essayIndex < essaySoal.length - 1 ? 'Selanjutnya →' : '✅ Selesai & Kirim'}
@@ -1207,12 +1237,24 @@ function App() {
         </div>
       );
     }
+
+    // FIX 8: Fallback jika quiz hanya PG tanpa essay dan sudah selesai semua
+    return (
+      <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
+        <TopBar />
+        <div style={{ fontSize: '60px', marginBottom: '16px' }}>✅</div>
+        <p style={{ color: '#f0e000', fontSize: '20px', fontWeight: '900' }}>Semua soal selesai!</p>
+        <button onClick={() => setQuizSelesai(true)} style={{ ...S.btnOrange, marginTop: '16px' }}>
+          Lihat Hasil →
+        </button>
+      </div>
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════
   // GURU — BUAT QUIZ
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'guruBuatQuiz') return (
+  if (page === 'guruBuatQuiz') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumIsiBab" />
@@ -1286,7 +1328,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // GURU — LIHAT HASIL SISWA
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'guruKelola') return (
+  if (page === 'guruKelola') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumIsiBab" />
@@ -1393,7 +1435,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // REGISTRASI SISWA
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'registerSiswa') return (
+  if (page === 'registerSiswa') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="menuSiswa" />
@@ -1502,7 +1544,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // REGISTRASI GURU
   // ══════════════════════════════════════════════════════════════════
-  if(page === 'registerGuru') return (
+  if (page === 'registerGuru') return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="menuGuru" />
@@ -1512,9 +1554,9 @@ function App() {
       {guruError && <div style={S.errBox}>⚠️ {guruError}</div>}
       <div style={{ width: '100%' }}>
         <label style={S.label}>NIP (Guru PNS) — isi salah satu</label>
-        <input style={S.input} placeholder="Nomor Induk Pegawai (jika ada)" value={guruForm.nip || ''} onChange={e => updateGuruForm('nip', e.target.value)} />
+        <input style={S.input} placeholder="Nomor Induk Pegawai (jika ada)" value={guruForm.nip} onChange={e => updateGuruForm('nip', e.target.value)} />
         <label style={S.label}>NIK (Guru Honor / semua guru)</label>
-        <input style={S.input} placeholder="Nomor Induk Kependudukan" value={guruForm.nik || ''} onChange={e => updateGuruForm('nik', e.target.value)} />
+        <input style={S.input} placeholder="Nomor Induk Kependudukan" value={guruForm.nik} onChange={e => updateGuruForm('nik', e.target.value)} />
         <label style={S.label}>Nama Lengkap *</label>
         <input style={S.input} placeholder="Nama lengkap sesuai SK" value={guruForm.nama} onChange={e => updateGuruForm('nama', e.target.value)} />
         <label style={S.label}>Nama Panggilan *</label>
