@@ -116,6 +116,11 @@ function App() {
   const [aboutData, setAboutData] = useState({ namaSekolah: 'SMA NEGERI 1 LUMBANJULU', namaKepsek: '', jabatanKepsek: 'Kepala Sekolah', tentang: '', visi: '', misi: '', fotoSekolah: '', fotoKepsek: '' });
   const [aboutLoaded, setAboutLoaded] = useState(false);
 
+  // ── DISKUSI STATE ─────────────────────────────────────────────
+  const [diskusiList, setDiskusiList] = useState([]);
+  const [diskusiInput, setDiskusiInput] = useState('');
+  const [diskusiLoading, setDiskusiLoading] = useState(false);
+
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
   const mapelList = [
@@ -620,6 +625,61 @@ function App() {
     setTimeout(() => setAdminMsg(''), 3000);
   };
 
+  // ── DISKUSI FUNCTIONS ────────────────────────────────────────
+  const loadDiskusi = async (mapelNama, kelasLabel) => {
+    setDiskusiLoading(true);
+    try {
+      const q = query(
+        collection(db, 'diskusi'),
+        where('mapel', '==', mapelNama),
+        where('kelas', '==', kelasLabel)
+      );
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => {
+        const ta = a.timestamp?.seconds || 0;
+        const tb = b.timestamp?.seconds || 0;
+        return ta - tb;
+      });
+      setDiskusiList(list);
+    } catch (e) { console.error(e); }
+    setDiskusiLoading(false);
+  };
+
+  const kirimDiskusi = async (mapelNama, kelasLabel) => {
+    if (!diskusiInput.trim()) return;
+    const pesan = diskusiInput.trim();
+    setDiskusiInput('');
+    try {
+      const docRef = await addDoc(collection(db, 'diskusi'), {
+        mapel: mapelNama,
+        kelas: kelasLabel,
+        pengirimId: userData.uid,
+        pengirimNama: userData.nama,
+        pengirimRole: userRole,
+        pesan,
+        timestamp: new Date()
+      });
+      setDiskusiList(prev => [...prev, {
+        id: docRef.id,
+        mapel: mapelNama,
+        kelas: kelasLabel,
+        pengirimId: userData.uid,
+        pengirimNama: userData.nama,
+        pengirimRole: userRole,
+        pesan,
+        timestamp: { seconds: Date.now() / 1000 }
+      }]);
+    } catch (e) { console.error(e); }
+  };
+
+  const hapusDiskusi = async (pesanId, pengirimId) => {
+    // Siswa hanya bisa hapus miliknya, guru bisa hapus semua
+    if (userRole === 'siswa' && pengirimId !== userData.uid) return;
+    await deleteDoc(doc(db, 'diskusi', pesanId));
+    setDiskusiList(prev => prev.filter(d => d.id !== pesanId));
+  };
+
   // ── Logout ─────────────────────────────────────────────────────
   const logout = async () => {
     await signOut(auth);
@@ -808,14 +868,7 @@ function App() {
     <button style={S.btnBack} onClick={() => { if (fn) fn(); else setPage(to); }}>‹ Kembali</button>
   );
 
-  const PwInput = ({ placeholder, val, setVal, show, setShow }) => (
-    <div style={S.pwWrap}>
-      <input style={{ ...S.input, paddingRight: '40px' }}
-        type={show ? 'text' : 'password'} placeholder={placeholder}
-        value={val} onChange={e => setVal(e.target.value)} />
-      <button style={S.eyeBtn} onClick={() => setShow(!show)}>{show ? '🙈' : '👁️'}</button>
-    </div>
-  );
+  // PwInput removed - inline to fix keyboard bug
 
   const LoadingSpinner = () => (
     <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -1227,8 +1280,20 @@ function App() {
         <input style={S.input} type="text" placeholder="Masukkan NISN"
           value={siswaLoginNISN} onChange={e => setSiswaLoginNISN(e.target.value)} />
         <label style={S.label}>Password:</label>
-        <PwInput placeholder="••••••••" val={siswaLoginPassword}
-          setVal={setSiswaLoginPassword} show={showLoginPassword} setShow={setShowLoginPassword} />
+        <div style={S.pwWrap}>
+          <input
+            style={{ ...S.input, paddingRight: '40px', marginBottom: '0' }}
+            type={showLoginPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            value={siswaLoginPassword}
+            onChange={e => setSiswaLoginPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+          <button type="button" style={S.eyeBtn} onClick={() => setShowLoginPassword(v => !v)}>
+            {showLoginPassword ? '🙈' : '👁️'}
+          </button>
+        </div>
+        <div style={{ height: '12px' }} />
         <p style={{ color: '#00c8ff', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
           Lupa Password?
         </p>
@@ -1258,8 +1323,20 @@ function App() {
         <input style={S.input} type="text" placeholder="Masukkan NIP atau NIK"
           value={guruLoginNIP} onChange={e => setGuruLoginNIP(e.target.value)} />
         <label style={S.label}>Password:</label>
-        <PwInput placeholder="••••••••" val={guruLoginPassword}
-          setVal={setGuruLoginPassword} show={showLoginPassword} setShow={setShowLoginPassword} />
+        <div style={S.pwWrap}>
+          <input
+            style={{ ...S.input, paddingRight: '40px', marginBottom: '0' }}
+            type={showLoginPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            value={guruLoginPassword}
+            onChange={e => setGuruLoginPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+          <button type="button" style={S.eyeBtn} onClick={() => setShowLoginPassword(v => !v)}>
+            {showLoginPassword ? '🙈' : '👁️'}
+          </button>
+        </div>
+        <div style={{ height: '12px' }} />
         <p style={{ color: '#00c8ff', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
           Lupa Password?
         </p>
@@ -1453,7 +1530,24 @@ function App() {
       <p style={{ color: '#00c8ff', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
         📚 Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
-      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>Pilih Bab Pembelajaran</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '12px', letterSpacing: '0.8px' }}>Pilih Bab Pembelajaran</p>
+
+      {/* Tombol Diskusi Online */}
+      <button onClick={() => {
+        const kelasLabel = `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`;
+        loadDiskusi(selectedMapel.nama, kelasLabel);
+        setPage('diskusi');
+      }} style={{ width: '100%', padding: '14px 18px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,rgba(0,160,200,0.5),rgba(0,100,160,0.8))', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', boxShadow: '0 4px 16px rgba(0,150,200,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '22px' }}>💬</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: '800', fontSize: '14px' }}>Diskusi Online</div>
+            <div style={{ fontSize: '11px', color: 'rgba(180,230,255,0.7)', marginTop: '1px' }}>Tanya jawab kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}</div>
+          </div>
+        </div>
+        <span style={{ color: 'rgba(0,200,255,0.8)', fontSize: '20px' }}>›</span>
+      </button>
+
       <div style={{ width: '100%' }}>
         {babList.length === 0 && (
           <div style={{ ...S.card, textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
@@ -2347,6 +2441,112 @@ function App() {
       </button>
     </div>
   );
+
+
+  // ══════════════════════════════════════════════════════════════════
+  // DISKUSI ONLINE
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'diskusi') {
+    const kelasLabel = `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`;
+    const formatWaktu = (ts) => {
+      if (!ts) return '';
+      const d = new Date(ts.seconds * 1000);
+      return d.toLocaleString('id-ID', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    };
+
+    return (
+      <div style={{ ...S.page, paddingBottom: '120px' }}>
+        <TopBar />
+        <BackBtn to="forumBab" />
+
+        {/* Header */}
+        <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,100,180,0.4),rgba(0,60,130,0.6))', border: '1px solid rgba(0,200,255,0.2)', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '800', fontSize: '16px', margin: '0 0 2px' }}>💬 Diskusi Online</p>
+          <p style={{ color: 'rgba(150,210,255,0.65)', fontSize: '12px', margin: 0 }}>
+            {selectedMapel?.nama} · Kelas {kelasLabel}
+          </p>
+        </div>
+
+        {/* Info */}
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.1)', marginBottom: '8px', padding: '10px 14px' }}>
+          <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '11px', margin: 0, letterSpacing: '0.5px' }}>
+            💡 Siswa & guru di kelas ini bisa saling bertanya dan menjawab. Tekan 🔄 untuk refresh pesan terbaru.
+          </p>
+        </div>
+
+        {/* Refresh button */}
+        <button onClick={() => loadDiskusi(selectedMapel.nama, kelasLabel)}
+          style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid rgba(0,200,255,0.2)', background: 'rgba(0,200,255,0.06)', color: '#00c8ff', fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginBottom: '16px' }}>
+          🔄 Refresh Pesan Terbaru
+        </button>
+
+        {/* Loading */}
+        {diskusiLoading && <LoadingSpinner />}
+
+        {/* Pesan List */}
+        {!diskusiLoading && diskusiList.length === 0 && (
+          <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '8px' }}>💬</div>
+            <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '13px', margin: 0 }}>Belum ada diskusi. Jadilah yang pertama bertanya!</p>
+          </div>
+        )}
+
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+          {diskusiList.map((d, i) => {
+            const isMine = d.pengirimId === userData?.uid;
+            const isGuru = d.pengirimRole === 'guru';
+            return (
+              <div key={d.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                {/* Nama & role */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexDirection: isMine ? 'row-reverse' : 'row' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isGuru ? 'linear-gradient(135deg,#0055cc,#0099ff)' : 'linear-gradient(135deg,rgba(150,100,0,0.6),rgba(100,60,0,0.8))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }}>
+                    {isGuru ? '👨‍🏫' : '🎓'}
+                  </div>
+                  <span style={{ fontSize: '11px', color: isGuru ? '#00c8ff' : 'rgba(255,200,0,0.7)', fontWeight: '700' }}>
+                    {d.pengirimNama} {isGuru ? '· Guru' : ''}
+                  </span>
+                  <span style={{ fontSize: '10px', color: 'rgba(150,180,220,0.4)' }}>{formatWaktu(d.timestamp)}</span>
+                </div>
+
+                {/* Bubble */}
+                <div style={{ position: 'relative', maxWidth: '82%' }}>
+                  <div style={{ padding: '10px 14px', borderRadius: isMine ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: isMine ? 'linear-gradient(135deg,rgba(0,100,200,0.5),rgba(0,60,150,0.7))' : isGuru ? 'linear-gradient(135deg,rgba(0,80,160,0.4),rgba(0,50,120,0.6))' : 'rgba(255,255,255,0.06)', border: isMine ? '1px solid rgba(0,200,255,0.25)' : isGuru ? '1px solid rgba(0,150,255,0.2)' : '1px solid rgba(255,255,255,0.08)', wordBreak: 'break-word' }}>
+                    <p style={{ color: 'white', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{d.pesan}</p>
+                  </div>
+
+                  {/* Tombol hapus */}
+                  {(isMine || userRole === 'guru') && (
+                    <button onClick={() => hapusDiskusi(d.id, d.pengirimId)}
+                      style={{ position: 'absolute', top: '-6px', right: isMine ? 'auto' : '-6px', left: isMine ? '-6px' : 'auto', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(200,30,30,0.8)', border: 'none', color: 'white', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Input pesan - fixed bottom */}
+        <div style={{ position: 'fixed', bottom: '44px', left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '430px', background: 'rgba(4,9,26,0.97)', borderTop: '1px solid rgba(0,200,255,0.15)', padding: '10px 16px', boxSizing: 'border-box', backdropFilter: 'blur(20px)', zIndex: 100 }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+            <textarea
+              style={{ ...S.input, flex: 1, height: '44px', marginBottom: 0, resize: 'none', padding: '10px 14px', fontSize: '14px', lineHeight: '1.4', maxHeight: '100px' }}
+              placeholder="Tulis pertanyaan atau jawaban..."
+              value={diskusiInput}
+              onChange={e => setDiskusiInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); kirimDiskusi(selectedMapel.nama, kelasLabel); } }}
+            />
+            <button onClick={() => kirimDiskusi(selectedMapel.nama, kelasLabel)}
+              disabled={!diskusiInput.trim()}
+              style={{ width: '44px', height: '44px', borderRadius: '12px', border: 'none', background: diskusiInput.trim() ? 'linear-gradient(135deg,#0055cc,#0099ff)' : 'rgba(0,100,200,0.2)', color: 'white', fontSize: '18px', cursor: diskusiInput.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: diskusiInput.trim() ? '0 4px 14px rgba(0,130,255,0.4)' : 'none' }}>
+              ➤
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
 }
 
