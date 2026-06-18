@@ -121,6 +121,15 @@ function App() {
   const [diskusiInput, setDiskusiInput] = useState('');
   const [diskusiLoading, setDiskusiLoading] = useState(false);
 
+  // ── DAFTAR SISWA & GURU STATE ─────────────────────────────────
+  const [daftarSiswaList, setDaftarSiswaList] = useState([]);
+  const [daftarGuruList, setDaftarGuruList] = useState([]);
+  const [daftarLoading, setDaftarLoading] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [daftarSiswaTingkat, setDaftarSiswaTingkat] = useState(null);
+  const [daftarSiswaJurusan, setDaftarSiswaJurusan] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
+
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
   const mapelList = [
@@ -623,6 +632,71 @@ function App() {
       setAdminMsg('✅ Halaman Tentang berhasil disimpan!');
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // ── DAFTAR SISWA & GURU FUNCTIONS ───────────────────────────
+  const loadSiswaByKelas = async (tingkat, jurusan) => {
+    setDaftarLoading(true);
+    try {
+      const q = query(collection(db, 'users'),
+        where('role', '==', 'siswa'),
+        where('status', '==', 'approved'),
+        where('kelas', '==', tingkat),
+        where('jurusan', '==', jurusan));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => d.data());
+      // Urutkan berdasarkan total poin tertinggi
+      list.sort((a, b) => {
+        const pA = (a.poinPG||0)+(a.poinEssay||0)+(a.poinModul||0);
+        const pB = (b.poinPG||0)+(b.poinEssay||0)+(b.poinModul||0);
+        return pB - pA;
+      });
+      setDaftarSiswaList(list);
+    } catch (e) { console.error(e); }
+    setDaftarLoading(false);
+  };
+
+  const loadLeaderboard = async () => {
+    setDaftarLoading(true);
+    try {
+      const q = query(collection(db, 'users'),
+        where('role', '==', 'siswa'),
+        where('status', '==', 'approved'));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => d.data());
+      list.sort((a, b) => {
+        const pA = (a.poinPG||0)+(a.poinEssay||0)+(a.poinModul||0);
+        const pB = (b.poinPG||0)+(b.poinEssay||0)+(b.poinModul||0);
+        return pB - pA;
+      });
+      setLeaderboard(list.slice(0, 50));
+    } catch (e) { console.error(e); }
+    setDaftarLoading(false);
+  };
+
+  const loadSemuaGuru = async () => {
+    setDaftarLoading(true);
+    try {
+      const q = query(collection(db, 'users'),
+        where('role', '==', 'guru'),
+        where('status', '==', 'approved'));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => d.data());
+      list.sort((a, b) => a.nama.localeCompare(b.nama));
+      setDaftarGuruList(list);
+    } catch (e) { console.error(e); }
+    setDaftarLoading(false);
+  };
+
+  const hitungTotalPoin = (u) =>
+    (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0);
+
+  const getRankBadge = (rank) => {
+    if (rank === 1) return { icon: '🥇', label: 'Rank #1', color: '#FFD700' };
+    if (rank === 2) return { icon: '🥈', label: 'Rank #2', color: '#C0C0C0' };
+    if (rank === 3) return { icon: '🥉', label: 'Rank #3', color: '#CD7F32' };
+    if (rank <= 10) return { icon: '🌟', label: `Rank #${rank}`, color: '#00c8ff' };
+    return { icon: '⭐', label: `Rank #${rank}`, color: 'rgba(180,200,255,0.6)' };
   };
 
   // ── DISKUSI FUNCTIONS ────────────────────────────────────────
@@ -1397,13 +1471,16 @@ function App() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginBottom: '14px' }}>
           {[
             { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,rgba(108,52,131,0.65),rgba(60,10,90,0.9))', glow: 'rgba(108,52,131,0.25)', to: 'forum' },
-            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,rgba(26,100,180,0.65),rgba(10,55,130,0.9))', glow: 'rgba(26,100,180,0.25)', to: '' },
-            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,rgba(170,40,40,0.65),rgba(110,10,10,0.9))', glow: 'rgba(170,40,40,0.25)', to: '' },
+            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,rgba(26,100,180,0.65),rgba(10,55,130,0.9))', glow: 'rgba(26,100,180,0.25)', to: 'daftarSiswa' },
+            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,rgba(170,40,40,0.65),rgba(110,10,10,0.9))', glow: 'rgba(170,40,40,0.25)', to: 'daftarGuru' },
             { label: 'Perpustakaan', icon: '📚', grad: 'linear-gradient(135deg,rgba(20,110,55,0.65),rgba(5,70,25,0.9))', glow: 'rgba(20,110,55,0.25)', to: '' },
             { label: 'Ujian Sekolah', icon: '📋', grad: 'linear-gradient(135deg,rgba(130,25,25,0.65),rgba(80,5,5,0.9))', glow: 'rgba(130,25,25,0.25)', to: '' },
             { label: 'Pesan',         icon: '💬', grad: 'linear-gradient(135deg,rgba(20,90,140,0.65),rgba(5,50,100,0.9))', glow: 'rgba(20,90,140,0.25)', to: '' },
           ].map((m, i) => (
-            <button key={i} onClick={() => { if (m.to) setPage(m.to); }}
+            <button key={i} onClick={() => {
+              if (m.to === 'daftarGuru') { loadSemuaGuru(); setPage('daftarGuru'); }
+              else if (m.to) setPage(m.to);
+            }}
               style={{ padding: '18px 14px', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.07)', background: m.grad, color: 'white', fontWeight: '700', fontSize: '13px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', boxShadow: `0 6px 20px ${m.glow}`, backdropFilter: 'blur(8px)', opacity: m.to ? 1 : 0.6, textAlign: 'left' }}>
               <span style={{ fontSize: '24px' }}>{m.icon}</span>
               <span style={{ lineHeight: '1.2' }}>{m.label}</span>
@@ -2551,6 +2628,320 @@ function App() {
       </div>
     );
   }
+
+
+  // ══════════════════════════════════════════════════════════════════
+  // DAFTAR SISWA — MENU UTAMA
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'daftarSiswa') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="dashboard" />
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>👥 Daftar Siswa</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '24px', letterSpacing: '0.8px' }}>PILIH KELAS ATAU LIHAT PRESTASI</p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+        {[
+          { tingkat: '10', color: '#0066ff', grad: 'linear-gradient(135deg,rgba(0,80,200,0.5),rgba(0,40,140,0.8))', glow: 'rgba(0,80,200,0.2)' },
+          { tingkat: '11', color: '#00aaff', grad: 'linear-gradient(135deg,rgba(0,120,200,0.5),rgba(0,70,160,0.8))', glow: 'rgba(0,120,200,0.2)' },
+          { tingkat: '12', color: '#00d4ff', grad: 'linear-gradient(135deg,rgba(0,160,200,0.5),rgba(0,100,170,0.8))', glow: 'rgba(0,160,200,0.2)' },
+        ].map(k => (
+          <button key={k.tingkat} onClick={() => { setDaftarSiswaTingkat(k.tingkat); setDaftarSiswaJurusan(null); setPage('daftarSiswaKelas'); }}
+            style={{ width: '100%', padding: '20px 22px', borderRadius: '18px', border: `1px solid rgba(0,200,255,0.2)`, background: k.grad, color: 'white', fontWeight: '800', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: `0 6px 20px ${k.glow}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <span style={{ fontSize: '28px' }}>🎓</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '18px', fontWeight: '900' }}>Kelas {k.tingkat}</div>
+                <div style={{ fontSize: '12px', color: 'rgba(180,230,255,0.7)', fontWeight: '600' }}>Pilih jurusan A–J</div>
+              </div>
+            </div>
+            <span style={{ color: 'rgba(0,220,255,0.8)', fontSize: '22px' }}>›</span>
+          </button>
+        ))}
+
+        {/* Prestasi / Leaderboard */}
+        <button onClick={() => { loadLeaderboard(); setPage('leaderboard'); }}
+          style={{ width: '100%', padding: '20px 22px', borderRadius: '18px', border: '1px solid rgba(255,210,0,0.3)', background: 'linear-gradient(135deg,rgba(180,120,0,0.5),rgba(120,70,0,0.85))', color: 'white', fontWeight: '800', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 6px 20px rgba(200,130,0,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span style={{ fontSize: '28px' }}>🏆</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '18px', fontWeight: '900', color: '#ffd700' }}>Prestasi</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,220,100,0.7)', fontWeight: '600' }}>Top 50 siswa terbaik se-sekolah</div>
+            </div>
+          </div>
+          <span style={{ color: '#ffd700', fontSize: '22px' }}>›</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // DAFTAR SISWA — PILIH JURUSAN
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'daftarSiswaKelas') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="daftarSiswa" />
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🎓 Kelas {daftarSiswaTingkat}</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.8px' }}>PILIH JURUSAN</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px', width: '100%' }}>
+        {['A','B','C','D','E','F','G','H','I','J'].map(j => (
+          <button key={j} onClick={() => {
+            setDaftarSiswaJurusan(j);
+            loadSiswaByKelas(daftarSiswaTingkat, j);
+            setPage('daftarSiswaList');
+          }} style={{ padding: '18px 8px', borderRadius: '14px', border: '1px solid rgba(0,200,255,0.2)', background: 'linear-gradient(135deg,rgba(0,80,180,0.5),rgba(0,40,130,0.8))', color: 'white', fontWeight: '900', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(0,80,200,0.15)' }}>
+            {daftarSiswaTingkat}{j}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // DAFTAR SISWA — LIST PER KELAS
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'daftarSiswaList') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="daftarSiswaKelas" />
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👥 Kelas {daftarSiswaTingkat}{daftarSiswaJurusan}</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '16px', letterSpacing: '0.8px' }}>
+        {daftarLoading ? 'Memuat...' : `${daftarSiswaList.length} siswa · urut poin tertinggi`}
+      </p>
+      {daftarLoading && <LoadingSpinner />}
+      {!daftarLoading && daftarSiswaList.length === 0 && (
+        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px' }}>🎓</div>
+          <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '13px', margin: 0 }}>
+            Saat ini kelas {daftarSiswaTingkat}{daftarSiswaJurusan} belum memiliki siswa terdaftar.
+          </p>
+        </div>
+      )}
+      {daftarSiswaList.map((s, i) => (
+        <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); setPage('profilSiswa'); }}
+          style={{ ...S.card, border: '1px solid rgba(0,180,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,80,180,0.5),rgba(0,40,130,0.8))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>
+            {s.avatar || '🎓'}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: 'white' }}>{s.nama}</p>
+            <p style={{ color: 'rgba(150,200,255,0.6)', fontSize: '11px', margin: 0 }}>NISN: {s.nisn}</p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ color: '#ffd700', fontWeight: '900', fontSize: '16px', margin: 0 }}>{hitungTotalPoin(s)}</p>
+            <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '10px', margin: 0 }}>poin</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // LEADERBOARD — TOP 50
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'leaderboard') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="daftarSiswa" />
+      <p style={{ color: '#ffd700', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>🏆 Papan Prestasi</p>
+      <p style={{ color: 'rgba(200,180,100,0.6)', fontSize: '12px', marginBottom: '16px', letterSpacing: '0.8px' }}>TOP 50 SISWA TERBAIK SE-SEKOLAH</p>
+      {daftarLoading && <LoadingSpinner />}
+      {!daftarLoading && leaderboard.length === 0 && (
+        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+          <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '13px', margin: 0 }}>Belum ada data prestasi.</p>
+        </div>
+      )}
+      {leaderboard.map((s, i) => {
+        const rank = i + 1;
+        const badge = getRankBadge(rank);
+        const totalPoin = hitungTotalPoin(s);
+        return (
+          <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank }); setPage('profilSiswa'); }}
+            style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', marginBottom: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', background: rank <= 3 ? `linear-gradient(135deg,rgba(${rank===1?'200,150,0':rank===2?'150,150,150':'160,100,50'},0.2),rgba(0,20,60,0.7))` : 'rgba(255,255,255,0.04)', border: `1px solid ${rank <= 3 ? badge.color+'44' : 'rgba(255,255,255,0.07)'}`, boxShadow: rank <= 3 ? `0 4px 16px ${badge.color}22` : 'none' }}>
+            {/* Rank Badge */}
+            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: rank <= 3 ? `radial-gradient(circle,${badge.color}44,${badge.color}11)` : 'rgba(255,255,255,0.05)', border: `2px solid ${badge.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: rank <= 3 ? `0 0 12px ${badge.color}44` : 'none' }}>
+              <span style={{ fontSize: rank <= 3 ? '22px' : '14px', fontWeight: '900', color: badge.color }}>{rank <= 3 ? badge.icon : `#${rank}`}</span>
+            </div>
+            {/* Avatar & Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: rank <= 3 ? badge.color : 'white' }}>{s.nama}</p>
+              <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '11px', margin: 0 }}>Kelas {s.kelas}{s.jurusan}</p>
+            </div>
+            {/* Poin */}
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <p style={{ color: rank <= 3 ? badge.color : '#ffd700', fontWeight: '900', fontSize: '18px', margin: 0 }}>{totalPoin}</p>
+              <p style={{ color: 'rgba(150,200,255,0.4)', fontSize: '10px', margin: 0 }}>poin</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // PROFIL SISWA (+ SERTIFIKAT JIKA TOP 50)
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'profilSiswa' && selectedProfile) {
+    const totalPoin = hitungTotalPoin(selectedProfile);
+    const rank = selectedProfile.rank;
+    const isTop50 = rank !== null && rank <= 50;
+    const badge = rank ? getRankBadge(rank) : null;
+
+    return (
+      <div style={S.page}>
+        <TopBar />
+        <BackBtn to={rank !== null ? 'leaderboard' : 'daftarSiswaList'} fn={() => { setSelectedProfile(null); setPage(rank !== null ? 'leaderboard' : 'daftarSiswaList'); }} />
+
+        {/* Profil Card */}
+        <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,60,150,0.5),rgba(0,30,90,0.8))', border: '1px solid rgba(0,200,255,0.2)', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', backdropFilter: 'blur(12px)' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,200,0.5),rgba(0,50,150,0.8))', border: '2px solid rgba(0,200,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', margin: '0 auto 14px', boxShadow: '0 6px 20px rgba(0,100,200,0.3)' }}>
+            {selectedProfile.avatar || '🎓'}
+          </div>
+          <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
+          <p style={{ color: 'rgba(0,200,255,0.7)', fontSize: '13px', margin: '0 0 2px', letterSpacing: '1px' }}>
+            Kelas {selectedProfile.kelas}{selectedProfile.jurusan}
+          </p>
+          <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '12px', margin: '0 0 16px' }}>NISN: {selectedProfile.nisn}</p>
+          {/* Total Poin */}
+          <div style={{ background: 'rgba(0,200,120,0.1)', border: '1px solid rgba(0,200,120,0.2)', borderRadius: '12px', padding: '12px' }}>
+            <p style={{ color: 'rgba(0,200,120,0.7)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 4px', textTransform: 'uppercase' }}>Total Poin</p>
+            <p style={{ color: 'white', fontSize: '32px', fontWeight: '900', margin: 0 }}>
+              {totalPoin}
+              <span style={{ fontSize: '14px', color: 'rgba(0,200,120,0.6)', marginLeft: '6px' }}>pts</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Bio Info */}
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.12)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 TENTANG</p>
+          <div style={{ fontSize: '13px', color: 'rgba(180,210,255,0.7)', lineHeight: '1.9' }}>
+            {selectedProfile.citaCita && <p style={{ margin: 0 }}>🎯 Cita-cita: <span style={{ color: 'white' }}>{selectedProfile.citaCita}</span></p>}
+            {selectedProfile.hobby && <p style={{ margin: 0 }}>🎮 Hobby: <span style={{ color: 'white' }}>{selectedProfile.hobby}</span></p>}
+            {selectedProfile.bio && <p style={{ margin: '6px 0 0', color: 'rgba(180,210,255,0.65)', lineHeight: '1.7' }}>{selectedProfile.bio}</p>}
+          </div>
+        </div>
+
+        {/* Sertifikat Digital untuk Top 50 */}
+        {isTop50 && (
+          <div style={{ width: '100%', background: 'linear-gradient(160deg,#1a0a00,#2d1800,#3a2200,#2d1800,#1a0a00)', border: '2px solid #b8860b', borderRadius: '20px', padding: '24px 20px', marginBottom: '14px', textAlign: 'center', boxShadow: `0 8px 32px rgba(184,134,11,0.35), inset 0 0 40px rgba(255,200,0,0.04)`, position: 'relative', overflow: 'hidden' }}>
+            {/* Dekoratif corner */}
+            <div style={{ position: 'absolute', top: '12px', left: '12px', width: '20px', height: '20px', borderTop: '2px solid #ffd700', borderLeft: '2px solid #ffd700', borderRadius: '4px 0 0 0' }} />
+            <div style={{ position: 'absolute', top: '12px', right: '12px', width: '20px', height: '20px', borderTop: '2px solid #ffd700', borderRight: '2px solid #ffd700', borderRadius: '0 4px 0 0' }} />
+            <div style={{ position: 'absolute', bottom: '12px', left: '12px', width: '20px', height: '20px', borderBottom: '2px solid #ffd700', borderLeft: '2px solid #ffd700', borderRadius: '0 0 0 4px' }} />
+            <div style={{ position: 'absolute', bottom: '12px', right: '12px', width: '20px', height: '20px', borderBottom: '2px solid #ffd700', borderRight: '2px solid #ffd700', borderRadius: '0 0 4px 0' }} />
+            {/* Glow line atas bawah */}
+            <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '60%', height: '2px', background: 'linear-gradient(90deg,transparent,#ffd700,transparent)' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '60%', height: '2px', background: 'linear-gradient(90deg,transparent,#ffd700,transparent)' }} />
+
+            {/* Badge rank */}
+            <div style={{ fontSize: '48px', marginBottom: '8px' }}>{badge.icon}</div>
+            <p style={{ fontSize: '10px', color: 'rgba(255,200,0,0.5)', letterSpacing: '3px', margin: '0 0 4px', fontWeight: '700' }}>SERTIFIKAT DIGITAL</p>
+            <p style={{ fontSize: '13px', color: 'rgba(255,200,0,0.7)', letterSpacing: '2px', margin: '0 0 16px', fontWeight: '600' }}>E-JULU ACHIEVEMENT</p>
+
+            {/* Divider */}
+            <div style={{ width: '100%', height: '1px', background: 'linear-gradient(90deg,transparent,#b8860b,transparent)', marginBottom: '16px' }} />
+
+            <p style={{ fontSize: '11px', color: 'rgba(255,200,0,0.5)', letterSpacing: '2px', margin: '0 0 8px' }}>DIBERIKAN KEPADA</p>
+            <p style={{ fontSize: '22px', fontWeight: '900', color: '#ffd700', margin: '0 0 4px', textShadow: '0 0 20px rgba(255,200,0,0.4)' }}>{selectedProfile.nama}</p>
+            <p style={{ fontSize: '13px', color: 'rgba(255,200,0,0.65)', margin: '0 0 16px' }}>Kelas {selectedProfile.kelas}{selectedProfile.jurusan}</p>
+
+            {/* Divider */}
+            <div style={{ width: '100%', height: '1px', background: 'linear-gradient(90deg,transparent,#b8860b,transparent)', marginBottom: '16px' }} />
+
+            <p style={{ fontSize: '11px', color: 'rgba(255,200,0,0.5)', letterSpacing: '2px', margin: '0 0 8px' }}>ATAS PRESTASI</p>
+            <p style={{ fontSize: '14px', color: 'white', fontWeight: '700', margin: '0 0 4px' }}>{badge.label} — Papan Prestasi E-JULU</p>
+            <p style={{ fontSize: '12px', color: 'rgba(255,200,0,0.6)', margin: '0 0 16px' }}>SMA NEGERI 1 LUMBANJULU</p>
+
+            {/* Poin besar */}
+            <div style={{ background: 'rgba(255,200,0,0.08)', border: '1px solid rgba(255,200,0,0.2)', borderRadius: '12px', padding: '12px', marginBottom: '14px' }}>
+              <p style={{ fontSize: '10px', color: 'rgba(255,200,0,0.5)', letterSpacing: '2px', margin: '0 0 4px' }}>TOTAL POIN</p>
+              <p style={{ fontSize: '36px', fontWeight: '900', color: '#ffd700', margin: 0, textShadow: '0 0 20px rgba(255,200,0,0.3)' }}>{totalPoin}</p>
+            </div>
+
+            {/* Logo + sekolah */}
+            <img src="/logo_sekolah.png" alt="Logo" style={{ width: '50px', height: '50px', objectFit: 'contain', borderRadius: '50%', marginBottom: '8px', opacity: 0.8 }} />
+            <p style={{ fontSize: '9px', color: 'rgba(255,200,0,0.35)', letterSpacing: '1.5px', margin: 0 }}>📚 E-JULU · Dev by Restuadi G. Sinaga, S.Kom</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // DAFTAR GURU
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'daftarGuru') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="dashboard" />
+      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👨‍🏫 Daftar Guru</p>
+      <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '16px', letterSpacing: '0.8px' }}>
+        {daftarLoading ? 'Memuat...' : `${daftarGuruList.length} guru aktif`}
+      </p>
+      {daftarLoading && <LoadingSpinner />}
+      {!daftarLoading && daftarGuruList.length === 0 && (
+        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+          <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '13px', margin: 0 }}>Belum ada guru terdaftar.</p>
+        </div>
+      )}
+      {daftarGuruList.map((g, i) => (
+        <div key={i} onClick={() => { setSelectedProfile({ ...g, type: 'guru' }); setPage('profilGuru'); }}
+          style={{ ...S.card, border: '1px solid rgba(0,200,255,0.12)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,80,200,0.5),rgba(0,40,140,0.8))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,80,200,0.2)' }}>
+            {g.avatar || '👨‍🏫'}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: 'white' }}>{g.namaPanggilan || g.nama}</p>
+            <p style={{ color: '#00c8ff', fontSize: '12px', margin: '0 0 1px', fontWeight: '600' }}>{g.mapel}</p>
+            <p style={{ color: 'rgba(150,200,255,0.5)', fontSize: '11px', margin: 0 }}>{g.jabatan}</p>
+          </div>
+          <span style={{ color: 'rgba(0,200,255,0.5)', fontSize: '18px' }}>›</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // PROFIL GURU
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'profilGuru' && selectedProfile) return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="daftarGuru" fn={() => { setSelectedProfile(null); setPage('daftarGuru'); }} />
+
+      {/* Hero Card */}
+      <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,50,130,0.6),rgba(0,30,90,0.85))', border: '1px solid rgba(0,200,255,0.2)', borderRadius: '20px', padding: '28px 20px', marginBottom: '14px', textAlign: 'center', backdropFilter: 'blur(12px)' }}>
+        <div style={{ width: '84px', height: '84px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,220,0.5),rgba(0,50,160,0.8))', border: '3px solid rgba(0,200,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px', boxShadow: '0 6px 24px rgba(0,100,200,0.3)' }}>
+          {selectedProfile.avatar || '👨‍🏫'}
+        </div>
+        <p style={{ color: 'white', fontSize: '21px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
+        {selectedProfile.namaPanggilan && selectedProfile.namaPanggilan !== selectedProfile.nama && (
+          <p style={{ color: 'rgba(0,200,255,0.6)', fontSize: '13px', margin: '0 0 2px' }}>"{selectedProfile.namaPanggilan}"</p>
+        )}
+        <p style={{ color: '#00c8ff', fontSize: '14px', fontWeight: '700', margin: '0 0 4px' }}>{selectedProfile.mapel}</p>
+        <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', margin: 0, letterSpacing: '0.5px' }}>{selectedProfile.jabatan}</p>
+      </div>
+
+      {/* Info Lengkap */}
+      <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.12)' }}>
+        <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 INFO GURU</p>
+        <div style={{ fontSize: '13px', color: 'rgba(180,210,255,0.7)', lineHeight: '2' }}>
+          {selectedProfile.nip && <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: 'white' }}>{selectedProfile.nip}</span></p>}
+          {selectedProfile.telpon && <p style={{ margin: 0 }}>📞 Telpon: <span style={{ color: 'white' }}>{selectedProfile.telpon}</span></p>}
+        </div>
+      </div>
+
+      {/* Bio */}
+      {selectedProfile.bio && (
+        <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.1)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '700', fontSize: '13px', marginBottom: '10px', letterSpacing: '1px' }}>💬 BIO</p>
+          <p style={{ color: 'rgba(180,210,255,0.7)', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{selectedProfile.bio}</p>
+        </div>
+      )}
+    </div>
+  );
 
 }
 
