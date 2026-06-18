@@ -46,7 +46,7 @@ function App() {
   // FIX 1: Tambah field nip dan nik di guruForm agar tidak crash
   const [guruForm, setGuruForm] = useState({
     nip:'', nik:'', nama:'', namaPanggilan:'', mapel:'',
-    jabatan:'', email:'', password:'', konfirmasi:'', bio:''
+    jabatan:'', email:'', telpon:'', password:'', konfirmasi:'', bio:''
   });
   const [siswaError, setSiswaError] = useState('');
   const [guruError, setGuruError] = useState('');
@@ -410,7 +410,7 @@ function App() {
   const registrasiGuru = async () => {
     const f = guruForm;
     if (!f.nama||!f.namaPanggilan||!f.mapel||!f.jabatan||
-        !f.email||!f.password||!f.konfirmasi||!f.bio) {
+        !f.email||!f.telpon||!f.password||!f.konfirmasi||!f.bio) {
       setGuruError('Semua field wajib diisi!'); return;
     }
     // FIX 5: Cek nip/nik dengan benar (kedua field sudah ada di state)
@@ -428,7 +428,7 @@ function App() {
         nip: f.nip || '', nik: f.nik || '',
         nama: f.nama, namaPanggilan: f.namaPanggilan,
         mapel: f.mapel, jabatan: f.jabatan,
-        email: f.email, bio: f.bio, fotoUrl,
+        email: f.email, telpon: f.telpon, bio: f.bio, fotoUrl,
         poinUpload: 0, poinNilai: 0,
         pelanggaran: 0, createdAt: new Date()
       });
@@ -703,7 +703,7 @@ function App() {
     if (rank === 1) return { icon: '🥇', label: 'Rank #1', color: '#FFD700' };
     if (rank === 2) return { icon: '🥈', label: 'Rank #2', color: '#C0C0C0' };
     if (rank === 3) return { icon: '🥉', label: 'Rank #3', color: '#CD7F32' };
-    if (rank <= 10) return { icon: '🌟', label: `Rank #${rank}`, color: '#2563eb' };
+    if (rank <= 10) return { icon: '🌟', label: `Rank #${rank}`, color: '#4f46e5' };
     return { icon: '⭐', label: `Rank #${rank}`, color: 'rgba(180,200,255,0.6)' };
   };
 
@@ -841,66 +841,76 @@ function App() {
     alert('Nilai essay tersimpan!');
   };
 
-  // ── STYLES (LIGHT & COLORFUL THEME) ─────────────────────────
+  // ── STYLES (MODERN KEKINIAN) ──────────────────────────────────
   const S = {
     page: {
       minHeight: '100vh',
-      background: 'linear-gradient(160deg,#f0f9ff 0%,#e0f2fe 40%,#f0fdf4 100%)',
-      color: '#1e293b', display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '24px 18px 80px', fontFamily: "'Segoe UI',system-ui,sans-serif",
+      background: '#f8fafc',
+      color: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '20px 16px 90px', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
       maxWidth: '430px', margin: '0 auto',
     },
     input: {
-      width: '100%', padding: '13px 16px', borderRadius: '12px',
-      border: '1.5px solid #bfdbfe',
+      width: '100%', padding: '14px 16px', borderRadius: '14px',
+      border: '1.5px solid #e2e8f0',
       background: 'white',
-      color: '#1e293b', fontSize: '14px', marginBottom: '12px',
+      color: '#0f172a', fontSize: '15px', marginBottom: '12px',
       outline: 'none', boxSizing: 'border-box',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+      fontFamily: 'inherit',
     },
-    label: { fontSize: '11px', color: '#64748b', marginBottom: '5px', display: 'block', fontWeight: '700', letterSpacing: '0.8px', textTransform: 'uppercase' },
+    label: {
+      fontSize: '11px', color: '#64748b', marginBottom: '6px', display: 'block',
+      fontWeight: '700', letterSpacing: '0.8px', textTransform: 'uppercase',
+    },
     select: {
-      width: '100%', padding: '13px 16px', borderRadius: '12px',
-      border: '1.5px solid #bfdbfe', background: 'white',
-      color: '#1e293b', fontSize: '14px', marginBottom: '12px',
+      width: '100%', padding: '14px 16px', borderRadius: '14px',
+      border: '1.5px solid #e2e8f0', background: 'white',
+      color: '#0f172a', fontSize: '15px', marginBottom: '12px',
       outline: 'none', boxSizing: 'border-box',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+      fontFamily: 'inherit',
     },
     btnBack: {
       alignSelf: 'flex-start',
       background: 'white',
-      border: '1.5px solid #93c5fd', color: '#2563eb', fontSize: '13px',
-      fontWeight: '700', padding: '8px 18px', borderRadius: '30px',
-      cursor: 'pointer', marginBottom: '18px',
-      boxShadow: '0 2px 8px rgba(37,99,235,0.1)',
+      border: '1.5px solid #e2e8f0', color: '#475569', fontSize: '13px',
+      fontWeight: '600', padding: '8px 16px', borderRadius: '10px',
+      cursor: 'pointer', marginBottom: '16px',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      display: 'flex', alignItems: 'center', gap: '4px',
     },
     btnOrange: {
       width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
       background: 'linear-gradient(135deg,#f97316,#ea580c)',
-      color: 'white', fontWeight: '800', fontSize: '16px',
+      color: 'white', fontWeight: '700', fontSize: '16px',
       cursor: 'pointer', marginTop: '8px',
-      boxShadow: '0 6px 20px rgba(249,115,22,0.35)',
+      boxShadow: '0 4px 14px rgba(249,115,22,0.4)',
+      fontFamily: 'inherit', letterSpacing: '0.3px',
     },
     btnBlue: {
       flex: 1, padding: '18px', borderRadius: '16px',
-      border: '1.5px solid #93c5fd',
-      background: 'linear-gradient(135deg,#2563eb,#1d4ed8)',
-      cursor: 'pointer', fontWeight: '800', fontSize: '18px', color: 'white',
-      boxShadow: '0 4px 16px rgba(37,99,235,0.25)',
+      border: 'none',
+      background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
+      cursor: 'pointer', fontWeight: '700', fontSize: '16px', color: 'white',
+      boxShadow: '0 4px 14px rgba(59,130,246,0.35)',
+      fontFamily: 'inherit',
     },
     btnTeal: {
-      width: '100%', padding: '17px 20px', borderRadius: '16px', border: 'none',
-      background: 'linear-gradient(135deg,#0891b2,#0e7490)',
+      width: '100%', padding: '16px 20px', borderRadius: '14px', border: 'none',
+      background: 'linear-gradient(135deg,#06b6d4,#0891b2)',
       color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer',
       marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '14px',
-      boxShadow: '0 4px 16px rgba(8,145,178,0.3)',
+      boxShadow: '0 4px 14px rgba(6,182,212,0.35)',
+      fontFamily: 'inherit',
     },
     btnGold: {
-      width: '100%', padding: '17px 20px', borderRadius: '16px', border: 'none',
-      background: 'linear-gradient(135deg,#d97706,#b45309)',
+      width: '100%', padding: '16px 20px', borderRadius: '14px', border: 'none',
+      background: 'linear-gradient(135deg,#f59e0b,#d97706)',
       color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer',
       display: 'flex', alignItems: 'center', gap: '14px',
-      boxShadow: '0 4px 16px rgba(217,119,6,0.3)',
+      boxShadow: '0 4px 14px rgba(245,158,11,0.35)',
+      fontFamily: 'inherit',
     },
     pwWrap: { position: 'relative', width: '100%' },
     eyeBtn: {
@@ -908,20 +918,22 @@ function App() {
       background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '15px',
     },
     errBox: {
-      background: '#fef2f2', border: '1px solid #fca5a5',
+      background: '#fff1f2', border: '1.5px solid #fda4af',
       borderRadius: '12px', padding: '12px 16px',
-      color: '#dc2626', fontSize: '13px', marginBottom: '14px', width: '100%',
+      color: '#e11d48', fontSize: '13px', marginBottom: '14px', width: '100%',
+      fontWeight: '600',
     },
     successBox: {
-      background: '#f0fdf4', border: '1px solid #86efac',
+      background: '#f0fdf4', border: '1.5px solid #86efac',
       borderRadius: '12px', padding: '12px 16px',
       color: '#16a34a', fontSize: '13px', marginBottom: '14px', width: '100%',
+      fontWeight: '600',
     },
     card: {
       background: 'white',
-      border: '1px solid #e2e8f0',
+      border: '1px solid #f1f5f9',
       borderRadius: '16px', padding: '16px', width: '100%', marginBottom: '12px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
     },
     linkBtn: {
       display: 'flex', alignItems: 'center', gap: '10px',
@@ -931,11 +943,11 @@ function App() {
   };
 
   const TopBar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '24px', width: '100%' }}>
-      <div style={{ width: '38px', height: '38px', borderRadius: '11px', background: 'linear-gradient(135deg,#2563eb,#0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', boxShadow: '0 4px 14px rgba(37,99,235,0.35)', flexShrink: 0 }}>📚</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '20px', width: '100%' }}>
+      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg,#3b82f6,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '21px', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', flexShrink: 0 }}>📚</div>
       <div>
-        <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', letterSpacing: '2px' }}>E-JULU</span>
-        <div style={{ fontSize: '9px', color: '#64748b', letterSpacing: '0.8px', marginTop: '-1px', fontWeight: '600' }}>E-Learning SMA NEGERI 1 LUMBANJULU</div>
+        <div style={{ fontSize: '19px', fontWeight: '800', color: '#0f172a', letterSpacing: '1.5px', lineHeight: 1.1 }}>E-JULU</div>
+        <div style={{ fontSize: '9px', color: '#94a3b8', letterSpacing: '0.5px', fontWeight: '600' }}>E-Learning · SMA NEGERI 1 LUMBANJULU</div>
       </div>
     </div>
   );
@@ -960,8 +972,8 @@ function App() {
 
   const LoadingSpinner = () => (
     <div style={{ textAlign: 'center', padding: '40px' }}>
-      <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '3px solid #bfdbfe', borderTop: '3px solid #2563eb', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
-      <p style={{ color: '#94a3b8', fontSize: '13px', letterSpacing: '1px' }}>Memuat...</p>
+      <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '3px solid #e2e8f0', borderTop: '3px solid #3b82f6', margin: '0 auto 14px', animation: 'spin 0.7s linear infinite' }} />
+      <p style={{ color: '#94a3b8', fontSize: '13px', fontWeight: '600' }}>Memuat...</p>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -977,20 +989,20 @@ function App() {
   // SPLASH
   // ══════════════════════════════════════════════════════════════════
   if (page === 'splash') return (
-    <div style={{ ...S.page, justifyContent: 'center', minHeight: '100vh', padding: '0', background: 'linear-gradient(160deg,#eff6ff 0%,#dbeafe 40%,#ecfdf5 100%)' }}>
+    <div style={{ ...S.page, justifyContent: 'center', minHeight: '100vh', padding: '0', background: 'linear-gradient(160deg,#fafafa 0%,#eff6ff 50%,#f0fdf4 100%)' }}>
       {/* Background decorative blobs */}
       <div style={{ position: 'absolute', top: '5%', right: '5%', width: '180px', height: '180px', background: 'radial-gradient(circle,rgba(37,99,235,0.12) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', bottom: '15%', left: '5%', width: '140px', height: '140px', background: 'radial-gradient(circle,rgba(16,185,129,0.1) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', top: '40%', left: '0%', width: '100px', height: '100px', background: 'radial-gradient(circle,rgba(249,115,22,0.08) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', padding: '40px 24px 120px', boxSizing: 'border-box' }}>
         {/* Logo badge */}
-        <div style={{ width: '90px', height: '90px', borderRadius: '24px', background: 'linear-gradient(135deg,#0055cc,#0099ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '42px', boxShadow: '0 12px 40px rgba(0,130,255,0.5)', marginBottom: '20px' }}>📚</div>
-        <p style={{ fontSize: '11px', color: '#2563eb', letterSpacing: '4px', margin: '0 0 6px', fontWeight: '700' }}>SELAMAT DATANG DI</p>
-        <p style={{ fontSize: '36px', fontWeight: '900', color: '#1e293b', margin: '0 0 4px', letterSpacing: '3px', textAlign: 'center' }}>E-JULU</p>
+        <div style={{ width: '90px', height: '90px', borderRadius: '24px', background: 'linear-gradient(135deg,#6366f1,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '42px', boxShadow: '0 12px 40px rgba(0,130,255,0.5)', marginBottom: '20px' }}>📚</div>
+        <p style={{ fontSize: '11px', color: '#4f46e5', letterSpacing: '4px', margin: '0 0 6px', fontWeight: '700' }}>SELAMAT DATANG DI</p>
+        <p style={{ fontSize: '38px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px', letterSpacing: '2px', textAlign: 'center', fontFamily: 'inherit' }}>E-JULU</p>
         <p style={{ fontSize: '13px', color: '#0ea5e9', letterSpacing: '2px', margin: '0 0 6px', fontWeight: '600' }}>E-LEARNING SMA N 1 LUMBANJULU</p>
         <div style={{ width: '60px', height: '2px', background: 'linear-gradient(90deg,transparent,#2563eb,transparent)', margin: '10px 0 20px' }} />
         <img src="/logo_sekolah.png" alt="Logo" style={{ width: '100px', height: '100px', objectFit: 'contain', marginBottom: '16px', borderRadius: '50%', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }} />
-        <p style={{ fontSize: '15px', fontWeight: '800', color: '#1e293b', textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.5px' }}>SMA NEGERI 1 LUMBANJULU</p>
+        <p style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.5px' }}>SMA NEGERI 1 LUMBANJULU</p>
         <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 40px', letterSpacing: '1px' }}>Kabupaten Toba · Sumatera Utara</p>
         <img src="/robot.png" alt="Robot" style={{ height: '130px', marginBottom: '32px', filter: 'drop-shadow(0 10px 20px rgba(0,150,255,0.4))' }} />
         <button onClick={() => setPage('role')} style={{ ...S.btnOrange, width: '200px', padding: '18px', fontSize: '18px', fontWeight: '900', letterSpacing: '3px', borderRadius: '50px' }}>
@@ -1007,7 +1019,7 @@ function App() {
   if (page === 'menunggu') return (
     <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
       <TopBar />
-      <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,130,0,0.2),rgba(150,80,0,0.3))', border: '2px solid rgba(255,180,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '20px', boxShadow: '0 8px 30px rgba(200,130,0,0.2)' }}>⏳</div>
+      <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: '#fef3c7', border: '2px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '20px', boxShadow: '0 8px 30px rgba(200,130,0,0.2)' }}>⏳</div>
       <p style={{ color: '#d97706', fontSize: '20px', fontWeight: '900', marginBottom: '8px', letterSpacing: '0.5px' }}>Pendaftaran Terkirim!</p>
       <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.8', marginBottom: '24px' }}>
         Akunmu sedang menunggu<br />persetujuan admin sekolah.<br />
@@ -1025,7 +1037,7 @@ function App() {
   if (page === 'ditolak') return (
     <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center' }}>
       <TopBar />
-      <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(200,30,30,0.2),rgba(140,10,10,0.3))', border: '2px solid rgba(255,80,80,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '20px', boxShadow: '0 8px 30px rgba(200,30,30,0.2)' }}>❌</div>
+      <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: '#fef2f2', border: '2px solid #fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '20px', boxShadow: '0 8px 30px rgba(200,30,30,0.2)' }}>❌</div>
       <p style={{ color: '#ff6060', fontSize: '20px', fontWeight: '900', marginBottom: '8px' }}>Pendaftaran Ditolak</p>
       <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.8', marginBottom: '24px' }}>
         Maaf, pendaftaranmu ditolak oleh admin.<br />
@@ -1043,13 +1055,13 @@ function App() {
       <TopBar />
       <BackBtn to="splash" />
       <p style={{ fontSize: '13px', color: '#64748b', textAlign: 'center', marginBottom: '8px', letterSpacing: '2px', fontWeight: '700' }}>MASUK SEBAGAI</p>
-      <p style={{ fontSize: '22px', fontWeight: '900', textAlign: 'center', margin: '0 0 28px', color: '#1e293b' }}>Pilih Peranmu</p>
+      <p style={{ fontSize: '22px', fontWeight: '800', textAlign: 'center', margin: '0 0 28px', color: '#0f172a' }}>Pilih Peranmu</p>
       <div style={{ display: 'flex', gap: '14px', width: '100%', marginBottom: '14px' }}>
-        <button onClick={() => setPage('menuGuru')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 16px', fontSize: '15px', fontWeight: '800' }}>
+        <button onClick={() => setPage('menuGuru')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '26px 16px', fontSize: '15px', fontWeight: '700' }}>
           <span style={{ fontSize: '32px' }}>👨‍🏫</span>
           <span style={{ color: '#0ea5e9' }}>GURU</span>
         </button>
-        <button onClick={() => setPage('menuSiswa')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 16px', fontSize: '15px', fontWeight: '800', border: '1px solid rgba(255,210,0,0.4)', background: 'linear-gradient(160deg,rgba(140,100,0,0.5),rgba(80,50,0,0.8))' }}>
+        <button onClick={() => setPage('menuSiswa')} style={{ ...S.btnGold, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '26px 16px', fontSize: '15px', flex: 1 }}>
           <span style={{ fontSize: '32px' }}>🎓</span>
           <span style={{ color: '#ffd700' }}>SISWA</span>
         </button>
@@ -1140,7 +1152,7 @@ function App() {
 
       {adminTab === 'all' && !adminLoading && (
         <div style={{ width: '100%' }}>
-          <p style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>👥 Semua User ({adminUsers.length})</p>
+          <p style={{ color: '#4f46e5', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>👥 Semua User ({adminUsers.length})</p>
           {adminUsers.length === 0 && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#94a3b8' }}>Belum ada user.</p></div>}
           {adminUsers.map((u, i) => (
             <div key={i} style={{ ...S.card, border: `1px solid ${u.status === 'approved' ? '#27ae60' : u.status === 'pending' ? '#f39c12' : '#e74c3c'}` }}>
@@ -1206,7 +1218,7 @@ function App() {
           <div style={{ fontSize: '36px' }}>{selectedUser.role === 'siswa' ? '🎓' : '👨‍🏫'}</div>
           <div>
             <p style={{ fontWeight: '900', fontSize: '16px', margin: '0 0 2px' }}>{selectedUser.nama}</p>
-            <p style={{ color: '#2563eb', fontSize: '12px', margin: 0 }}>{selectedUser.role === 'siswa' ? `Siswa — Kelas ${selectedUser.kelas}-${selectedUser.jurusan}` : `Guru — ${selectedUser.mapel}`}</p>
+            <p style={{ color: '#4f46e5', fontSize: '12px', margin: 0 }}>{selectedUser.role === 'siswa' ? `Siswa — Kelas ${selectedUser.kelas}-${selectedUser.jurusan}` : `Guru — ${selectedUser.mapel}`}</p>
             <p style={{ color: '#94a3b8', fontSize: '11px', margin: '2px 0 0' }}>{selectedUser.email}</p>
           </div>
         </div>
@@ -1250,7 +1262,7 @@ function App() {
       </div>
 
       <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-        <p style={{ color: '#2563eb', fontWeight: 'bold', marginBottom: '8px' }}>📊 Ubah Status</p>
+        <p style={{ color: '#4f46e5', fontWeight: 'bold', marginBottom: '8px' }}>📊 Ubah Status</p>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => approveUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#1e8449', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>✅ Setujui</button>
           <button onClick={() => rejectUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#b7860b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🚫 Tolak</button>
@@ -1273,7 +1285,7 @@ function App() {
       <TopBar />
       <BackBtn to="adminDashboard" fn={() => { setAdminTab('pending'); loadAdminUsers('pending'); setPage('adminDashboard'); }} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
-      <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>⚙️ Pengaturan Aplikasi</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>⚙️ Pengaturan Aplikasi</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.5px' }}>Edit tampilan dan info aplikasi</p>
       <div style={{ ...S.card, border: '1px solid #1e8449', width: '100%' }}>
         <p style={{ color: '#16a34a', fontWeight: 'bold', marginBottom: '12px' }}>📝 Info Sekolah</p>
@@ -1286,7 +1298,7 @@ function App() {
         <button onClick={simpanAppSettings} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>💾 Simpan Pengaturan</button>
       </div>
       <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-        <p style={{ color: '#2563eb', fontWeight: 'bold', marginBottom: '12px' }}>📊 Statistik Aplikasi</p>
+        <p style={{ color: '#4f46e5', fontWeight: 'bold', marginBottom: '12px' }}>📊 Statistik Aplikasi</p>
         <button onClick={async () => {
           const snap = await getDocs(collection(db, 'users'));
           const users = snap.docs.map(d => d.data());
@@ -1383,11 +1395,11 @@ function App() {
           </button>
         </div>
         <div style={{ height: '12px' }} />
-        <p style={{ color: '#2563eb', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
+        <p style={{ color: '#4f46e5', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
           Lupa Password?
         </p>
-        <div style={{ background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)', borderRadius: '12px', padding: '10px 14px', marginBottom: '16px' }}>
-          <p style={{ color: '#f0c040', fontSize: '12px', margin: 0 }}>⚠️ Akun harus sudah disetujui admin untuk bisa login.</p>
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', marginBottom: '16px' }}>
+          <p style={{ color: '#92400e', fontSize: '12px', margin: 0, fontWeight: '600' }}>⚠️ Akun harus sudah disetujui admin untuk bisa login.</p>
         </div>
         <button style={{ ...S.btnGold, borderRadius: '30px', justifyContent: 'center', fontSize: '17px' }}
           onClick={loginSiswa} disabled={loading}>
@@ -1426,11 +1438,11 @@ function App() {
           </button>
         </div>
         <div style={{ height: '12px' }} />
-        <p style={{ color: '#2563eb', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
+        <p style={{ color: '#4f46e5', fontSize: '12px', textAlign: 'right', marginBottom: '8px', cursor: 'pointer' }}>
           Lupa Password?
         </p>
-        <div style={{ background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)', borderRadius: '12px', padding: '10px 14px', marginBottom: '16px' }}>
-          <p style={{ color: '#f0c040', fontSize: '12px', margin: 0 }}>⚠️ Akun harus sudah disetujui admin untuk bisa login.</p>
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', marginBottom: '16px' }}>
+          <p style={{ color: '#92400e', fontSize: '12px', margin: 0, fontWeight: '600' }}>⚠️ Akun harus sudah disetujui admin untuk bisa login.</p>
         </div>
         <button style={{ ...S.btnGold, borderRadius: '30px', justifyContent: 'center', fontSize: '17px' }}
           onClick={loginGuru} disabled={loading}>
@@ -1450,7 +1462,7 @@ function App() {
         <TopBar />
         <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', border: '1px solid #93c5fd', borderRadius: '20px', padding: '16px 18px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(12px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#0066ff,#00aaff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', boxShadow: '0 4px 14px rgba(0,130,255,0.4)', flexShrink: 0 }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0 }}>
               {userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓')}
             </div>
             <div>
@@ -1483,24 +1495,24 @@ function App() {
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginBottom: '14px' }}>
           {[
-            { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,#7c3aed,#6d28d9)', glow: 'rgba(124,58,237,0.3)', to: 'forum' },
-            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,#2563eb,#1d4ed8)', glow: 'rgba(37,99,235,0.3)', to: 'daftarSiswa' },
-            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,#dc2626,#b91c1c)', glow: 'rgba(220,38,38,0.3)', to: 'daftarGuru' },
-            { label: 'Perpustakaan', icon: '📚', grad: 'linear-gradient(135deg,#16a34a,#15803d)', glow: 'rgba(22,163,74,0.3)', to: '' },
-            { label: 'Ujian Sekolah', icon: '📋', grad: 'linear-gradient(135deg,#ea580c,#c2410c)', glow: 'rgba(234,88,12,0.3)', to: '' },
-            { label: 'Pesan',         icon: '💬', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', glow: 'rgba(8,145,178,0.3)', to: '' },
+            { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', glow: 'rgba(139,92,246,0.35)', to: 'forum' },
+            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,#3b82f6,#2563eb)', glow: 'rgba(59,130,246,0.35)', to: 'daftarSiswa' },
+            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,#ef4444,#dc2626)', glow: 'rgba(239,68,68,0.35)', to: 'daftarGuru' },
+            { label: 'Perpustakaan', icon: '📚', grad: 'linear-gradient(135deg,#10b981,#059669)', glow: 'rgba(16,185,129,0.35)', to: '' },
+            { label: 'Ujian Sekolah', icon: '📋', grad: 'linear-gradient(135deg,#f97316,#ea580c)', glow: 'rgba(249,115,22,0.35)', to: '' },
+            { label: 'Pesan',         icon: '💬', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)', glow: 'rgba(6,182,212,0.35)', to: '' },
           ].map((m, i) => (
             <button key={i} onClick={() => {
               if (m.to === 'daftarGuru') { loadSemuaGuru(); setPage('daftarGuru'); }
               else if (m.to) setPage(m.to);
             }}
-              style={{ padding: '18px 14px', borderRadius: '18px', border: 'none', background: m.grad, color: 'white', fontWeight: '700', fontSize: '13px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', boxShadow: `0 6px 20px ${m.glow}`, opacity: m.to ? 1 : 0.55, textAlign: 'left', borderRadius: '18px' }}>
+              style={{ padding: '18px 14px', borderRadius: '18px', border: 'none', background: m.grad, color: 'white', fontWeight: '600', fontSize: '14px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', boxShadow: `0 4px 16px ${m.glow}`, opacity: m.to ? 1 : 0.5, textAlign: 'left', borderRadius: '16px', padding: '18px 14px' }}>
               <span style={{ fontSize: '24px' }}>{m.icon}</span>
               <span style={{ lineHeight: '1.2' }}>{m.label}</span>
             </button>
           ))}
         </div>
-        <button onClick={logout} style={{ width: '100%', padding: '12px', background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+        <button onClick={logout} style={{ width: '100%', padding: '13px', background: 'white', border: '1.5px solid #fee2e2', color: '#ef4444', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           🚪 Keluar / Logout
         </button>
       </div>
@@ -1515,7 +1527,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>Forum Belajar Online</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>Forum Belajar Online</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.5px' }}>Pilih Mata Pelajaran</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%' }}>
         {mapelList.map(m => {
@@ -1572,7 +1584,7 @@ function App() {
       {/* Pilih Tingkat dulu */}
       {!guruPilihTingkat ? (
         <div style={{ width: '100%' }}>
-          <p style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>📚 Pilih Tingkat Kelas:</p>
+          <p style={{ color: '#4f46e5', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>📚 Pilih Tingkat Kelas:</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {['10', '11', '12'].map(tingkat => (
               <button key={tingkat} onClick={() => setGuruPilihTingkat(tingkat)}
@@ -1586,10 +1598,10 @@ function App() {
         <div style={{ width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <button onClick={() => setGuruPilihTingkat(null)}
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid #4fc3f7', color: '#2563eb', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>
+              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid #4fc3f7', color: '#4f46e5', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>
               ← Kelas {guruPilihTingkat}
             </button>
-            <p style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '15px', margin: 0 }}>Pilih Jurusan:</p>
+            <p style={{ color: '#4f46e5', fontWeight: 'bold', fontSize: '15px', margin: 0 }}>Pilih Jurusan:</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '8px', width: '100%' }}>
             {['A','B','C','D','E','F','G','H','I','J'].map(j => (
@@ -1619,7 +1631,7 @@ function App() {
       <p style={{ color: '#d97706', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>
         {selectedMapel?.icon} {selectedMapel?.nama}
       </p>
-      <p style={{ color: '#2563eb', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
+      <p style={{ color: '#4f46e5', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
         📚 Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px', letterSpacing: '0.8px' }}>Pilih Bab Pembelajaran</p>
@@ -1668,7 +1680,7 @@ function App() {
                       <span onClick={e => { e.stopPropagation(); setEditBab(b.id); }}
                         style={{ fontSize: '16px', cursor: 'pointer' }}>✏️</span>
                     )}
-                    <span style={{ color: '#2563eb', fontSize: '20px' }}>›</span>
+                    <span style={{ color: '#4f46e5', fontSize: '20px' }}>›</span>
                   </div>
                 </button>
             }
@@ -1698,7 +1710,7 @@ function App() {
       <TopBar />
       <BackBtn to="forumBab" fn={() => { stopTimerModul(); stopTimerVideo(); setPage('forumBab'); }} />
       <p style={{ color: '#d97706', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>{selectedBab?.judul}</p>
-      <p style={{ color: '#2563eb', fontSize: '13px', fontWeight: 'bold', marginBottom: '2px' }}>
+      <p style={{ color: '#4f46e5', fontSize: '13px', fontWeight: 'bold', marginBottom: '2px' }}>
         {selectedMapel?.nama} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
       </p>
 
@@ -1714,7 +1726,7 @@ function App() {
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {/* Modul 1 */}
         <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-          <p style={{ color: '#2563eb', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran</p>
+          <p style={{ color: '#4f46e5', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran</p>
           {userRole === 'siswa'
             ? selectedBab?.modul
               ? <a href={selectedBab.modul} target="_blank" rel="noreferrer"
@@ -1736,7 +1748,7 @@ function App() {
 
         {/* Modul 2 */}
         <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-          <p style={{ color: '#2563eb', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran Lainnya</p>
+          <p style={{ color: '#4f46e5', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📄 Modul Pembelajaran Lainnya</p>
           {userRole === 'siswa'
             ? selectedBab?.modul2
               ? <a href={selectedBab.modul2} target="_blank" rel="noreferrer"
@@ -1811,7 +1823,7 @@ function App() {
 
         {/* Diskusi Online per Bab */}
         <div style={{ ...S.card, border: '1px solid rgba(0,160,220,0.3)' }}>
-          <p style={{ color: '#2563eb', fontWeight: '700', marginBottom: '10px', fontSize: '15px' }}>💬 Diskusi Online</p>
+          <p style={{ color: '#4f46e5', fontWeight: '700', marginBottom: '10px', fontSize: '15px' }}>💬 Diskusi Online</p>
           <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px' }}>
             Forum tanya jawab bab ini untuk kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
           </p>
@@ -1978,7 +1990,7 @@ function App() {
       {quizSoalList.map((q, i) => (
         <div key={q.id} style={{ ...S.card, border: '1px solid #bfdbfe' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '14px' }}>
+            <span style={{ color: '#4f46e5', fontWeight: 'bold', fontSize: '14px' }}>
               Soal {i + 1} — {q.tipe === 'pg' ? 'Pilihan Ganda' : 'Essay'}
             </span>
             <button onClick={() => hapusSoal(q.id)}
@@ -2123,7 +2135,7 @@ function App() {
           <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 10px' }}>Kelas {s.siswaKelas}</p>
           <div style={{ display: 'flex', gap: '12px' }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <p style={{ color: '#2563eb', fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{s.modulDurasi} mnt</p>
+              <p style={{ color: '#4f46e5', fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{s.modulDurasi} mnt</p>
               <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>Baca Modul</p>
               <p style={{ color: s.modulDurasi >= 120 ? '#2ecc71' : '#e74c3c', fontSize: '11px', margin: 0 }}>
                 {s.modulDurasi >= 120 ? '✅ Tercapai' : '❌ Kurang 2 jam'}
@@ -2301,6 +2313,8 @@ function App() {
             </div>
           </div>
         </div>
+        <label style={S.label}>Nomor Telepon *</label>
+        <input style={S.input} type="tel" placeholder="08xxxxxxxxxx" value={guruForm.telpon} onChange={e => updateGuruForm('telpon', e.target.value)} />
         <label style={S.label}>Bio Singkat *</label>
         <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Ceritakan sedikit tentang diri Anda sebagai pendidik..."
           value={guruForm.bio} onChange={e => updateGuruForm('bio', e.target.value)} />
@@ -2357,14 +2371,14 @@ function App() {
       <div style={S.page}>
         <TopBar />
         <BackBtn to="dashboard" />
-        <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px', letterSpacing: '0.5px' }}>⚙️ Pengaturan</p>
+        <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px', letterSpacing: '0.5px' }}>⚙️ Pengaturan</p>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>KELOLA AKUN KAMU</p>
 
         {pengaturanMsg && <div style={pengaturanMsg.startsWith('✅') || pengaturanMsg.startsWith('📧') ? S.successBox : S.errBox}>{pengaturanMsg}</div>}
 
         {/* Avatar */}
         <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-          <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>🖼️ Pilih Avatar</p>
+          <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>🖼️ Pilih Avatar</p>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
             <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,200,0.4),rgba(0,50,140,0.6))', border: '2px solid rgba(0,200,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', boxShadow: '0 6px 20px rgba(0,100,200,0.3)' }}>
               {currentAvatar}
@@ -2382,7 +2396,7 @@ function App() {
 
         {/* Edit Profil */}
         <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-          <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>✏️ Edit Profil</p>
+          <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>✏️ Edit Profil</p>
           {userRole === 'siswa' && (
             <>
               <label style={S.label}>Cita-cita</label>
@@ -2400,12 +2414,12 @@ function App() {
 
         {/* Info Akun */}
         <div style={{ ...S.card, border: '1px solid #e2e8f0' }}>
-          <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>📋 Info Akun</p>
+          <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>📋 Info Akun</p>
           <div style={{ fontSize: '13px', color: '#475569', lineHeight: '2' }}>
-            <p style={{ margin: 0 }}>📧 Email: <span style={{ color: '#1e293b', fontWeight: '600' }}>{userData?.email}</span></p>
-            {userRole === 'siswa' && <p style={{ margin: 0 }}>🎓 NISN: <span style={{ color: '#1e293b', fontWeight: '600' }}>{userData?.nisn}</span></p>}
-            {userRole === 'guru' && userData?.nip && <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#1e293b', fontWeight: '600' }}>{userData?.nip}</span></p>}
-            {userRole === 'guru' && userData?.nik && <p style={{ margin: 0 }}>🪪 NIK: <span style={{ color: '#1e293b', fontWeight: '600' }}>{userData?.nik}</span></p>}
+            <p style={{ margin: 0 }}>📧 Email: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.email}</span></p>
+            {userRole === 'siswa' && <p style={{ margin: 0 }}>🎓 NISN: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.nisn}</span></p>}
+            {userRole === 'guru' && userData?.nip && <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.nip}</span></p>}
+            {userRole === 'guru' && userData?.nik && <p style={{ margin: 0 }}>🪪 NIK: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.nik}</span></p>}
           </div>
         </div>
 
@@ -2422,7 +2436,7 @@ function App() {
         </div>
 
         {/* Logout */}
-        <button onClick={logout} style={{ width: '100%', padding: '12px', background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', marginTop: '4px' }}>
+        <button onClick={logout} style={{ width: '100%', padding: '13px', background: 'white', border: '1.5px solid #fee2e2', color: '#ef4444', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginTop: '4px' }}>
           🚪 Keluar / Logout
         </button>
       </div>
@@ -2436,7 +2450,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px', letterSpacing: '0.5px' }}>ℹ️ Tentang</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px', letterSpacing: '0.5px' }}>ℹ️ Tentang</p>
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>PROFIL SEKOLAH</p>
 
       {/* Foto & Nama Sekolah */}
@@ -2456,7 +2470,7 @@ function App() {
         <div style={{ ...S.card, border: '1px solid #e2e8f0' }}>
           {aboutData.visi && (
             <div style={{ marginBottom: aboutData.misi ? '14px' : 0 }}>
-              <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '13px', marginBottom: '6px', letterSpacing: '1px' }}>🎯 VISI</p>
+              <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '13px', marginBottom: '6px', letterSpacing: '1px' }}>🎯 VISI</p>
               <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.visi}</p>
             </div>
           )}
@@ -2484,7 +2498,7 @@ function App() {
 
       {/* E-JULU credit */}
       <div style={{ textAlign: 'center', marginTop: '8px', padding: '16px' }}>
-        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg,#0055cc,#0099ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', margin: '0 auto 8px', boxShadow: '0 4px 14px rgba(0,130,255,0.3)' }}>📚</div>
+        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg,#6366f1,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', margin: '0 auto 8px', boxShadow: '0 4px 14px rgba(0,130,255,0.3)' }}>📚</div>
         <p style={{ color: 'rgba(150,200,255,0.4)', fontSize: '11px', margin: '0 0 2px', letterSpacing: '1px' }}>POWERED BY</p>
         <p style={{ color: 'rgba(0,200,255,0.6)', fontSize: '14px', fontWeight: '900', margin: '0 0 4px', letterSpacing: '2px' }}>E-JULU</p>
         <p style={{ color: 'rgba(150,200,255,0.35)', fontSize: '11px', margin: 0 }}>Dev by Restuadi G. Sinaga, S.Kom</p>
@@ -2500,11 +2514,11 @@ function App() {
       <TopBar />
       <BackBtn to="adminSettings" fn={() => setPage('adminSettings')} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
-      <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🏫 Edit Halaman Tentang</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🏫 Edit Halaman Tentang</p>
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>KONTEN PROFIL SEKOLAH</p>
 
       <div style={{ ...S.card, border: '1px solid #bfdbfe', width: '100%' }}>
-        <p style={{ color: '#2563eb', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>🏫 Info Sekolah</p>
+        <p style={{ color: '#4f46e5', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>🏫 Info Sekolah</p>
         <label style={S.label}>Nama Sekolah</label>
         <input style={S.input} value={aboutData.namaSekolah} onChange={e => setAboutData(p => ({ ...p, namaSekolah: e.target.value }))} />
         <label style={S.label}>URL Foto Sekolah (Google Drive/link)</label>
@@ -2552,7 +2566,7 @@ function App() {
 
         {/* Header */}
         <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,100,180,0.4),rgba(0,60,130,0.6))', border: '1px solid #93c5fd', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px' }}>
-          <p style={{ color: '#2563eb', fontWeight: '800', fontSize: '16px', margin: '0 0 2px' }}>💬 Diskusi Online</p>
+          <p style={{ color: '#4f46e5', fontWeight: '800', fontSize: '16px', margin: '0 0 2px' }}>💬 Diskusi Online</p>
           <p style={{ color: 'rgba(150,210,255,0.65)', fontSize: '12px', margin: '0 0 2px' }}>
             {selectedMapel?.nama} · {selectedBab?.judul}
           </p>
@@ -2570,7 +2584,7 @@ function App() {
 
         {/* Refresh button */}
         <button onClick={() => loadDiskusi(selectedBab.id, kelasLabel)}
-          style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #93c5fd', background: 'rgba(0,200,255,0.06)', color: '#2563eb', fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginBottom: '16px' }}>
+          style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #93c5fd', background: 'rgba(0,200,255,0.06)', color: '#4f46e5', fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginBottom: '16px' }}>
           🔄 Refresh Pesan Terbaru
         </button>
 
@@ -2650,7 +2664,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>👥 Daftar Siswa</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>👥 Daftar Siswa</p>
       <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '24px', letterSpacing: '0.8px' }}>PILIH KELAS ATAU LIHAT PRESTASI</p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
@@ -2674,7 +2688,7 @@ function App() {
 
         {/* Prestasi / Leaderboard */}
         <button onClick={() => { loadLeaderboard(); setPage('leaderboard'); }}
-          style={{ width: '100%', padding: '20px 22px', borderRadius: '18px', border: '1px solid rgba(255,210,0,0.3)', background: 'linear-gradient(135deg,rgba(180,120,0,0.5),rgba(120,70,0,0.85))', color: 'white', fontWeight: '800', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 6px 20px rgba(200,130,0,0.2)' }}>
+          style={{ width: '100%', padding: '20px 22px', borderRadius: '18px', border: '1px solid rgba(255,210,0,0.3)', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '800', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 6px 20px rgba(200,130,0,0.2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <span style={{ fontSize: '28px' }}>🏆</span>
             <div style={{ textAlign: 'left' }}>
@@ -2695,7 +2709,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="daftarSiswa" />
-      <p style={{ color: '#1e293b', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🎓 Kelas {daftarSiswaTingkat}</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🎓 Kelas {daftarSiswaTingkat}</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.5px' }}>PILIH JURUSAN</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px', width: '100%' }}>
         {['A','B','C','D','E','F','G','H','I','J'].map(j => (
@@ -2731,22 +2745,42 @@ function App() {
           </p>
         </div>
       )}
-      {daftarSiswaList.map((s, i) => (
-        <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); setPage('profilSiswa'); }}
-          style={{ ...S.card, border: '1px solid #bfdbfe', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,80,180,0.5),rgba(0,40,130,0.8))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>
-            {s.avatar || '🎓'}
+      {!daftarLoading && daftarSiswaList.length > 0 && (
+        <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1.5px solid #bfdbfe', boxShadow: '0 4px 16px rgba(37,99,235,0.1)' }}>
+          {/* Header tabel */}
+          <div style={{ display: 'grid', gridTemplateColumns: '36px 28px 1fr 1fr 64px', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', padding: '10px 12px', gap: '8px', alignItems: 'center' }}>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: '700', letterSpacing: '0.5px' }}>NO</div>
+            <div></div>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: '700', letterSpacing: '0.5px' }}>NAMA</div>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: '700', letterSpacing: '0.5px' }}>NISN</div>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: '700', letterSpacing: '0.5px', textAlign: 'right' }}>POIN</div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: 'white' }}>{s.nama}</p>
-            <p style={{ color: 'rgba(150,200,255,0.6)', fontSize: '11px', margin: 0 }}>NISN: {s.nisn}</p>
-          </div>
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <p style={{ color: '#ffd700', fontWeight: '900', fontSize: '16px', margin: 0 }}>{hitungTotalPoin(s)}</p>
-            <p style={{ color: '#94a3b8', fontSize: '10px', margin: 0 }}>poin</p>
-          </div>
+          {/* Baris siswa */}
+          {daftarSiswaList.map((s, i) => (
+            <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); setPage('profilSiswa'); }}
+              style={{ display: 'grid', gridTemplateColumns: '36px 28px 1fr 1fr 64px', padding: '10px 12px', gap: '8px', alignItems: 'center', background: i % 2 === 0 ? 'white' : '#f8faff', borderTop: '1px solid #e2e8f0', cursor: 'pointer' }}>
+              {/* Nomor */}
+              <div style={{ fontSize: '12px', fontWeight: '800', color: '#4f46e5', textAlign: 'center' }}>{i + 1}</div>
+              {/* Avatar */}
+              <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px' }}>
+                {s.avatar || '🎓'}
+              </div>
+              {/* Nama */}
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontWeight: '700', fontSize: '13px', margin: 0, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.nama}</p>
+              </div>
+              {/* NISN */}
+              <div>
+                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{s.nisn}</p>
+              </div>
+              {/* Poin */}
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: '#4f46e5' }}>{hitungTotalPoin(s)}</span>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 
@@ -2828,10 +2862,10 @@ function App() {
 
         {/* Bio Info */}
         <div style={{ ...S.card }}>
-          <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 TENTANG</p>
+          <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 TENTANG</p>
           <div style={{ fontSize: '13px', color: '#475569', lineHeight: '2' }}>
-            {selectedProfile.citaCita && <p style={{ margin: '0 0 4px' }}>🎯 Cita-cita: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.citaCita}</span></p>}
-            {selectedProfile.hobby && <p style={{ margin: '0 0 4px' }}>🎮 Hobby: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.hobby}</span></p>}
+            {selectedProfile.citaCita && <p style={{ margin: '0 0 4px' }}>🎯 Cita-cita: <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedProfile.citaCita}</span></p>}
+            {selectedProfile.hobby && <p style={{ margin: '0 0 4px' }}>🎮 Hobby: <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedProfile.hobby}</span></p>}
             {selectedProfile.bio && (
               <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
                 <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{selectedProfile.bio}</p>
@@ -2910,12 +2944,12 @@ function App() {
       {daftarGuruList.map((g, i) => (
         <div key={i} onClick={() => { setSelectedProfile({ ...g, type: 'guru' }); setPage('profilGuru'); }}
           style={{ ...S.card, border: '1px solid #e2e8f0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,80,200,0.5),rgba(0,40,140,0.8))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,80,200,0.2)' }}>
+          <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,80,200,0.2)' }}>
             {g.avatar || '👨‍🏫'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: 'white' }}>{g.namaPanggilan || g.nama}</p>
-            <p style={{ color: '#2563eb', fontSize: '12px', margin: '0 0 1px', fontWeight: '600' }}>{g.mapel}</p>
+            <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 1px', fontWeight: '600' }}>{g.mapel}</p>
             <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>{g.jabatan}</p>
           </div>
           <span style={{ color: '#94a3b8', fontSize: '18px' }}>›</span>
@@ -2950,11 +2984,11 @@ function App() {
         <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 INFO GURU</p>
         <div style={{ fontSize: '13px', color: '#475569', lineHeight: '2.2' }}>
           {selectedProfile.nip
-            ? <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.nip}</span></p>
+            ? <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedProfile.nip}</span></p>
             : <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>NIP: tidak ada (guru honorer)</p>
           }
           {selectedProfile.telpon
-            ? <p style={{ margin: 0 }}>📞 Nomor Telpon: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.telpon}</span></p>
+            ? <p style={{ margin: 0 }}>📞 Nomor Telpon: <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedProfile.telpon}</span></p>
             : <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>Nomor Telpon: belum diisi</p>
           }
         </div>
