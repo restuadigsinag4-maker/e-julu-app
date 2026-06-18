@@ -591,20 +591,22 @@ function App() {
   const simpanEditProfil = async () => {
     if (!userData) return;
     const updateData = {};
-    if (editBioForm.bio.trim()) updateData.bio = editBioForm.bio.trim();
-    if (editBioForm.citaCita.trim()) updateData.citaCita = editBioForm.citaCita.trim();
-    if (editBioForm.hobby.trim()) updateData.hobby = editBioForm.hobby.trim();
-    // FIX: Selalu simpan avatar, termasuk jika diubah dari default
-    if (selectedAvatar) updateData.avatar = selectedAvatar;
-    else if (userData.avatar) updateData.avatar = userData.avatar;
-    if (Object.keys(updateData).length === 0) { setPengaturanMsg('Tidak ada perubahan.'); return; }
+    // Selalu update semua field yang ada nilainya
+    updateData.bio = editBioForm.bio.trim() || userData.bio || '';
+    if (userRole === 'siswa') {
+      updateData.citaCita = editBioForm.citaCita.trim() || userData.citaCita || '';
+      updateData.hobby = editBioForm.hobby.trim() || userData.hobby || '';
+    }
+    // Avatar — simpan apapun yang dipilih, termasuk yang sudah ada
+    if (selectedAvatar) {
+      updateData.avatar = selectedAvatar;
+    } else if (userData.avatar) {
+      updateData.avatar = userData.avatar;
+    }
     try {
       await updateDoc(doc(db, 'users', userData.uid), updateData);
-      // FIX: Update state lokal sekaligus agar avatar langsung berubah di dashboard
-      const newData = { ...userData, ...updateData };
-      setUserData(newData);
-      // Juga update selectedAvatar agar preview konsisten
-      if (updateData.avatar) setSelectedAvatar(updateData.avatar);
+      // Langsung update state lokal agar dashboard, pengaturan, dan profil sync
+      setUserData(prev => ({ ...prev, ...updateData }));
       setPengaturanMsg('✅ Profil berhasil diperbarui!');
     } catch (e) { setPengaturanMsg('❌ Gagal: ' + e.message); }
     setTimeout(() => setPengaturanMsg(''), 3000);
@@ -1449,11 +1451,11 @@ function App() {
         <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', border: '1px solid #93c5fd', borderRadius: '20px', padding: '16px 18px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(12px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#0066ff,#00aaff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', boxShadow: '0 4px 14px rgba(0,130,255,0.4)', flexShrink: 0 }}>
-              {userRole === 'guru' ? '👨‍🏫' : '🎓'}
+              {userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓')}
             </div>
             <div>
               <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 2px', textTransform: 'uppercase' }}>{userRole === 'guru' ? 'Guru' : `Kelas ${userData?.kelas}${userData?.jurusan}`}</p>
-              <p style={{ color: '#1e293b', fontSize: '14px', fontWeight: '800', margin: 0 }}>{userData?.nama}</p>
+              <p style={{ color: 'white', fontSize: '14px', fontWeight: '800', margin: 0 }}>{userData?.nama}</p>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -2805,32 +2807,39 @@ function App() {
         <BackBtn to={rank !== null ? 'leaderboard' : 'daftarSiswaList'} fn={() => { setSelectedProfile(null); setPage(rank !== null ? 'leaderboard' : 'daftarSiswaList'); }} />
 
         {/* Profil Card */}
-        <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,60,150,0.5),rgba(0,30,90,0.8))', border: '1px solid #93c5fd', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', backdropFilter: 'blur(12px)' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,200,0.5),rgba(0,50,150,0.8))', border: '2px solid rgba(0,200,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', margin: '0 auto 14px', boxShadow: '0 6px 20px rgba(0,100,200,0.3)' }}>
+        <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', border: 'none', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(37,99,235,0.3)' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
             {selectedProfile.avatar || '🎓'}
           </div>
           <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
-          <p style={{ color: 'rgba(0,200,255,0.7)', fontSize: '13px', margin: '0 0 2px', letterSpacing: '1px' }}>
+          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', margin: '0 0 2px', letterSpacing: '1px' }}>
             Kelas {selectedProfile.kelas}{selectedProfile.jurusan}
           </p>
-          <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 16px' }}>NISN: {selectedProfile.nisn}</p>
+          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12px', margin: '0 0 16px' }}>NISN: {selectedProfile.nisn}</p>
           {/* Total Poin */}
-          <div style={{ background: 'rgba(0,200,120,0.1)', border: '1px solid rgba(0,200,120,0.2)', borderRadius: '12px', padding: '12px' }}>
-            <p style={{ color: 'rgba(0,200,120,0.7)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 4px', textTransform: 'uppercase' }}>Total Poin</p>
+          <div style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '12px', padding: '12px' }}>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 4px', textTransform: 'uppercase' }}>Total Poin</p>
             <p style={{ color: 'white', fontSize: '32px', fontWeight: '900', margin: 0 }}>
               {totalPoin}
-              <span style={{ fontSize: '14px', color: 'rgba(0,200,120,0.6)', marginLeft: '6px' }}>pts</span>
+              <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', marginLeft: '6px' }}>pts</span>
             </p>
           </div>
         </div>
 
         {/* Bio Info */}
-        <div style={{ ...S.card, border: '1px solid #e2e8f0' }}>
+        <div style={{ ...S.card }}>
           <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 TENTANG</p>
-          <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.9' }}>
-            {selectedProfile.citaCita && <p style={{ margin: 0 }}>🎯 Cita-cita: <span style={{ color: 'white' }}>{selectedProfile.citaCita}</span></p>}
-            {selectedProfile.hobby && <p style={{ margin: 0 }}>🎮 Hobby: <span style={{ color: 'white' }}>{selectedProfile.hobby}</span></p>}
-            {selectedProfile.bio && <p style={{ margin: '6px 0 0', color: '#475569', lineHeight: '1.7' }}>{selectedProfile.bio}</p>}
+          <div style={{ fontSize: '13px', color: '#475569', lineHeight: '2' }}>
+            {selectedProfile.citaCita && <p style={{ margin: '0 0 4px' }}>🎯 Cita-cita: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.citaCita}</span></p>}
+            {selectedProfile.hobby && <p style={{ margin: '0 0 4px' }}>🎮 Hobby: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.hobby}</span></p>}
+            {selectedProfile.bio && (
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
+                <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{selectedProfile.bio}</p>
+              </div>
+            )}
+            {!selectedProfile.citaCita && !selectedProfile.hobby && !selectedProfile.bio && (
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Belum ada info profil.</p>
+            )}
           </div>
         </div>
 
@@ -2924,38 +2933,41 @@ function App() {
       <BackBtn to="daftarGuru" fn={() => { setSelectedProfile(null); setPage('daftarGuru'); }} />
 
       {/* Hero Card */}
-      <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,50,130,0.6),rgba(0,30,90,0.85))', border: '1px solid #93c5fd', borderRadius: '20px', padding: '28px 20px', marginBottom: '14px', textAlign: 'center', backdropFilter: 'blur(12px)' }}>
-        <div style={{ width: '84px', height: '84px', borderRadius: '50%', background: 'linear-gradient(135deg,rgba(0,100,220,0.5),rgba(0,50,160,0.8))', border: '3px solid rgba(0,200,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px', boxShadow: '0 6px 24px rgba(0,100,200,0.3)' }}>
+      <div style={{ width: '100%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', border: 'none', borderRadius: '20px', padding: '28px 20px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(220,38,38,0.3)' }}>
+        <div style={{ width: '84px', height: '84px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
           {selectedProfile.avatar || '👨‍🏫'}
         </div>
         <p style={{ color: 'white', fontSize: '21px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
         {selectedProfile.namaPanggilan && selectedProfile.namaPanggilan !== selectedProfile.nama && (
-          <p style={{ color: 'rgba(0,200,255,0.6)', fontSize: '13px', margin: '0 0 2px' }}>"{selectedProfile.namaPanggilan}"</p>
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', margin: '0 0 4px' }}>"{selectedProfile.namaPanggilan}"</p>
         )}
-        <p style={{ color: '#2563eb', fontSize: '14px', fontWeight: '700', margin: '0 0 4px' }}>{selectedProfile.mapel}</p>
-        <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', margin: 0, letterSpacing: '0.5px' }}>{selectedProfile.jabatan}</p>
+        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '14px', fontWeight: '700', margin: '0 0 4px' }}>{selectedProfile.mapel}</p>
+        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', margin: 0 }}>{selectedProfile.jabatan}</p>
       </div>
 
       {/* Info Lengkap */}
       <div style={{ ...S.card }}>
-        <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 INFO GURU</p>
+        <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 INFO GURU</p>
         <div style={{ fontSize: '13px', color: '#475569', lineHeight: '2.2' }}>
-          {selectedProfile.nip && <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.nip}</span></p>}
-          {selectedProfile.nik && <p style={{ margin: 0 }}>🪪 NIK: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.nik}</span></p>}
-          {selectedProfile.telpon && <p style={{ margin: 0 }}>📞 Telpon: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.telpon}</span></p>}
-          {!selectedProfile.nip && !selectedProfile.nik && !selectedProfile.telpon && (
-            <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Belum ada info tambahan.</p>
-          )}
+          {selectedProfile.nip
+            ? <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.nip}</span></p>
+            : <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>NIP: tidak ada (guru honorer)</p>
+          }
+          {selectedProfile.telpon
+            ? <p style={{ margin: 0 }}>📞 Nomor Telpon: <span style={{ color: '#1e293b', fontWeight: '600' }}>{selectedProfile.telpon}</span></p>
+            : <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>Nomor Telpon: belum diisi</p>
+          }
         </div>
       </div>
 
       {/* Bio */}
-      {selectedProfile.bio && (
-        <div style={{ ...S.card, border: '1px solid #e2e8f0' }}>
-          <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '13px', marginBottom: '10px', letterSpacing: '1px' }}>💬 BIO</p>
-          <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{selectedProfile.bio}</p>
-        </div>
-      )}
+      <div style={{ ...S.card }}>
+        <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '13px', marginBottom: '10px', letterSpacing: '1px' }}>💬 BIO</p>
+        {selectedProfile.bio
+          ? <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{selectedProfile.bio}</p>
+          : <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Belum ada bio.</p>
+        }
+      </div>
     </div>
   );
 
