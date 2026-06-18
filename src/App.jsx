@@ -120,6 +120,10 @@ function App() {
   const [diskusiList, setDiskusiList] = useState([]);
   const [diskusiInput, setDiskusiInput] = useState('');
   const [diskusiLoading, setDiskusiLoading] = useState(false);
+  const [diskusiEditId, setDiskusiEditId] = useState(null);
+  const [diskusiEditText, setDiskusiEditText] = useState('');
+  const [diskusiActionId, setDiskusiActionId] = useState(null);
+  const longPressTimer = useRef(null);
 
   // ── DAFTAR SISWA & GURU STATE ─────────────────────────────────
   const [daftarSiswaList, setDaftarSiswaList] = useState([]);
@@ -140,6 +144,9 @@ function App() {
   const [kelasForm, setKelasForm] = useState({ tingkat: '10', jurusan: 'A', waliKelas: '' });
   const [adminStats, setAdminStats] = useState(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
+  const [mapelEditList, setMapelEditList] = useState([]);
+  const [mapelLoading, setMapelLoading] = useState(false);
+  const [guruListForMapel, setGuruListForMapel] = useState([]);
 
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
@@ -769,10 +776,34 @@ function App() {
   };
 
   const hapusDiskusi = async (pesanId, pengirimId) => {
-    // Siswa hanya bisa hapus miliknya, guru bisa hapus semua
     if (userRole === 'siswa' && pengirimId !== userData.uid) return;
     await deleteDoc(doc(db, 'diskusi', pesanId));
     setDiskusiList(prev => prev.filter(d => d.id !== pesanId));
+    setDiskusiActionId(null);
+  };
+
+  const editDiskusi = async (pesanId, pesanBaru) => {
+    if (!pesanBaru.trim()) return;
+    await updateDoc(doc(db, 'diskusi', pesanId), { pesan: pesanBaru.trim(), diedit: true });
+    setDiskusiList(prev => prev.map(d => d.id === pesanId ? { ...d, pesan: pesanBaru.trim(), diedit: true } : d));
+    setDiskusiEditId(null);
+    setDiskusiEditText('');
+    setDiskusiActionId(null);
+  };
+
+  const handleLongPressStart = (d) => {
+    longPressTimer.current = setTimeout(() => {
+      const isMine = d.pengirimId === userData?.uid;
+      const isGuru = userRole === 'guru';
+      if (isMine || isGuru) {
+        setDiskusiActionId(d.id);
+        setDiskusiEditText(d.pesan);
+      }
+    }, 600);
+  };
+
+  const handleLongPressEnd = () => {
+    clearTimeout(longPressTimer.current);
   };
 
   // ── RBAC: AUDIT TRAIL ────────────────────────────────────────
@@ -984,6 +1015,59 @@ function App() {
     setAdminStatsLoading(false);
   };
 
+  // ── ADMIN KELOLA MAPEL ───────────────────────────────────────
+  const loadMapelAdmin = async () => {
+    setMapelLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'masterMapel'));
+      if (snap.empty) {
+        // Init dari mapelList default
+        const list = mapelList.map(m => ({ ...m, guruId: '', guruNama: '' }));
+        setMapelEditList(list);
+      } else {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.urutan || a.id) - (b.urutan || b.id));
+        setMapelEditList(list);
+      }
+      // Load guru aktif
+      const guruSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'guru'), where('status', '==', 'approved')));
+      setGuruListForMapel(guruSnap.docs.map(d => d.data()));
+    } catch (e) { console.error(e); }
+    setMapelLoading(false);
+  };
+
+  const simpanMapel = async (mapelItem) => {
+    try {
+      if (mapelItem.id && mapelItem.id.startsWith('mapel_')) {
+        await setDoc(doc(db, 'masterMapel', mapelItem.id), mapelItem);
+      } else {
+        const id = 'mapel_' + mapelItem.id;
+        await setDoc(doc(db, 'masterMapel', id), { ...mapelItem, id });
+      }
+      await catatAktivitas('EDIT_MAPEL', `Edit mapel: ${mapelItem.nama}, guru: ${mapelItem.guruNama || '-'}`);
+      setAdminMsg('✅ Mapel berhasil disimpan!');
+      setTimeout(() => setAdminMsg(''), 2000);
+    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+  };
+
+  const assignGuruKeMapel = async (mapelIdx, guruId) => {
+    const guru = guruListForMapel.find(g => g.uid === guruId);
+    const updated = [...mapelEditList];
+    updated[mapelIdx] = { ...updated[mapelIdx], guruId: guruId || '', guruNama: guru?.nama || '' };
+    setMapelEditList(updated);
+    await simpanMapel(updated[mapelIdx]);
+  };
+
+  const ubahNamaMapel = async (mapelIdx, namaBaru) => {
+    const updated = [...mapelEditList];
+    updated[mapelIdx] = { ...updated[mapelIdx], nama: namaBaru };
+    setMapelEditList(updated);
+  };
+
+  const simpanNamaMapel = async (mapelIdx) => {
+    await simpanMapel(mapelEditList[mapelIdx]);
+  };
+
   // ── Logout ─────────────────────────────────────────────────────
   const logout = async () => {
     await signOut(auth);
@@ -1065,7 +1149,7 @@ function App() {
   const S = {
     page: {
       minHeight: '100vh',
-      background: '#f8fafc',
+      background: 'linear-gradient(180deg,#e8f0ff 0%,#eef3ff 50%,#f0f4ff 100%)',
       color: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: '20px 16px 90px', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
       maxWidth: '430px', margin: '0 auto',
@@ -1094,7 +1178,7 @@ function App() {
     btnBack: {
       alignSelf: 'flex-start',
       background: 'white',
-      border: '1.5px solid #e2e8f0', color: '#475569', fontSize: '13px',
+      border: '1.5px solid #bfdbfe', color: '#2563eb', fontSize: '13px',
       fontWeight: '600', padding: '8px 16px', borderRadius: '10px',
       cursor: 'pointer', marginBottom: '16px',
       boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
@@ -1151,9 +1235,9 @@ function App() {
     },
     card: {
       background: 'white',
-      border: '1px solid #f1f5f9',
+      border: '1px solid #e2e8f0',
       borderRadius: '16px', padding: '16px', width: '100%', marginBottom: '12px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+      boxShadow: '0 2px 12px rgba(37,99,235,0.08)',
     },
     linkBtn: {
       display: 'flex', alignItems: 'center', gap: '10px',
@@ -1163,11 +1247,15 @@ function App() {
   };
 
   const TopBar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '20px', width: '100%' }}>
-      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg,#3b82f6,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '21px', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', flexShrink: 0 }}>📚</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px', width: '100%' }}>
+      {/* Logo white box with inner gradient */}
+      <div style={{ width: '58px', height: '58px', background: 'white', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,99,235,0.18)', border: '1px solid rgba(37,99,235,0.08)', flexShrink: 0 }}>
+        <div style={{ width: '42px', height: '42px', background: 'linear-gradient(135deg,#3b82f6,#6366f1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>📚</div>
+      </div>
       <div>
-        <div style={{ fontSize: '19px', fontWeight: '800', color: '#0f172a', letterSpacing: '1.5px', lineHeight: 1.1 }}>E-JULU</div>
-        <div style={{ fontSize: '9px', color: '#94a3b8', letterSpacing: '0.5px', fontWeight: '600' }}>E-Learning · SMA NEGERI 1 LUMBANJULU</div>
+        <div style={{ fontSize: '30px', fontWeight: '900', background: 'linear-gradient(135deg,#2563eb,#6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '2px', lineHeight: 1, fontFamily: 'inherit' }}>E-JULU</div>
+        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '600', letterSpacing: '0.3px' }}>E-Learning</div>
+        <div style={{ fontSize: '10px', color: '#475569', fontWeight: '700', letterSpacing: '0.5px' }}>SMA NEGERI 1 LUMBANJULU</div>
       </div>
     </div>
   );
@@ -1209,27 +1297,64 @@ function App() {
   // SPLASH
   // ══════════════════════════════════════════════════════════════════
   if (page === 'splash') return (
-    <div style={{ ...S.page, justifyContent: 'center', minHeight: '100vh', padding: '0', background: 'linear-gradient(160deg,#fafafa 0%,#eff6ff 50%,#f0fdf4 100%)' }}>
-      {/* Background decorative blobs */}
-      <div style={{ position: 'absolute', top: '5%', right: '5%', width: '180px', height: '180px', background: 'radial-gradient(circle,rgba(37,99,235,0.12) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', bottom: '15%', left: '5%', width: '140px', height: '140px', background: 'radial-gradient(circle,rgba(16,185,129,0.1) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', top: '40%', left: '0%', width: '100px', height: '100px', background: 'radial-gradient(circle,rgba(249,115,22,0.08) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', padding: '40px 24px 120px', boxSizing: 'border-box' }}>
-        {/* Logo badge */}
-        <div style={{ width: '90px', height: '90px', borderRadius: '24px', background: 'linear-gradient(135deg,#6366f1,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '42px', boxShadow: '0 12px 40px rgba(0,130,255,0.5)', marginBottom: '20px' }}>📚</div>
-        <p style={{ fontSize: '11px', color: '#4f46e5', letterSpacing: '4px', margin: '0 0 6px', fontWeight: '700' }}>SELAMAT DATANG DI</p>
-        <p style={{ fontSize: '38px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px', letterSpacing: '2px', textAlign: 'center', fontFamily: 'inherit' }}>E-JULU</p>
-        <p style={{ fontSize: '13px', color: '#0ea5e9', letterSpacing: '2px', margin: '0 0 6px', fontWeight: '600' }}>E-LEARNING SMA N 1 LUMBANJULU</p>
-        <div style={{ width: '60px', height: '2px', background: 'linear-gradient(90deg,transparent,#2563eb,transparent)', margin: '10px 0 20px' }} />
-        <img src="/logo_sekolah.png" alt="Logo" style={{ width: '100px', height: '100px', objectFit: 'contain', marginBottom: '16px', borderRadius: '50%', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }} />
-        <p style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.5px' }}>SMA NEGERI 1 LUMBANJULU</p>
-        <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 40px', letterSpacing: '1px' }}>Kabupaten Toba · Sumatera Utara</p>
-        <img src="/robot.png" alt="Robot" style={{ height: '130px', marginBottom: '32px', filter: 'drop-shadow(0 10px 20px rgba(0,150,255,0.4))' }} />
-        <button onClick={() => setPage('role')} style={{ ...S.btnOrange, width: '200px', padding: '18px', fontSize: '18px', fontWeight: '900', letterSpacing: '3px', borderRadius: '50px' }}>
-          MULAI
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#e8f0ff 0%,#dce8ff 40%,#eaf0ff 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', maxWidth: '430px', margin: '0 auto', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", position: 'relative', overflow: 'hidden' }}>
+      {/* Tech circuit lines decoration */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(37,99,235,0.06) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(99,102,241,0.06) 0%, transparent 50%)', pointerEvents: 'none' }} />
+      {/* Hexagon decorations */}
+      <div style={{ position: 'absolute', top: '4%', right: '6%', width: '60px', height: '60px', border: '1.5px solid rgba(37,99,235,0.2)', borderRadius: '12px', transform: 'rotate(15deg)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: '8%', right: '14%', width: '30px', height: '30px', border: '1px solid rgba(99,102,241,0.15)', borderRadius: '6px', transform: 'rotate(30deg)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: '3%', left: '8%', width: '40px', height: '40px', border: '1px solid rgba(37,99,235,0.12)', borderRadius: '8px', transform: 'rotate(-15deg)', pointerEvents: 'none' }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', padding: '60px 28px 0', boxSizing: 'border-box', flex: 1 }}>
+        {/* Logo hexagon */}
+        <div style={{ width: '100px', height: '100px', background: 'white', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '28px', boxShadow: '0 8px 32px rgba(37,99,235,0.18)', border: '1px solid rgba(37,99,235,0.08)' }}>
+          <div style={{ width: '72px', height: '72px', background: 'linear-gradient(135deg,#3b82f6,#6366f1)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px' }}>📚</div>
+        </div>
+
+        {/* E-JULU title */}
+        <div style={{ marginBottom: '10px', textAlign: 'center' }}>
+          <span style={{ fontSize: '52px', fontWeight: '900', background: 'linear-gradient(135deg,#2563eb,#6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '2px', lineHeight: 1, display: 'block' }}>E-JULU</span>
+        </div>
+        {/* Subtitle line */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '32px' }}>
+          <div style={{ width: '20px', height: '1.5px', background: '#94a3b8' }} />
+          <p style={{ fontSize: '13px', color: '#475569', fontWeight: '600', margin: 0, letterSpacing: '0.5px' }}>E-learning Sma Negeri 1 Lumbanjulu</p>
+          <div style={{ width: '20px', height: '1.5px', background: '#94a3b8' }} />
+        </div>
+
+        {/* START button — tech style */}
+        <button onClick={() => setPage('role')} style={{ padding: '16px 56px', borderRadius: '14px', border: '2px solid rgba(37,99,235,0.4)', background: 'linear-gradient(135deg,rgba(255,255,255,0.9),rgba(240,247,255,0.9))', color: '#2563eb', fontSize: '18px', fontWeight: '800', letterSpacing: '4px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(37,99,235,0.15), inset 0 1px 0 rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '12px', backdropFilter: 'blur(10px)', marginBottom: '40px' }}>
+          START <span style={{ fontSize: '20px' }}>⚡</span>
         </button>
+
+        {/* Laptop illustration — replaced with a styled card mockup */}
+        <div style={{ width: '100%', maxWidth: '340px', background: 'rgba(255,255,255,0.7)', borderRadius: '20px', padding: '16px', boxShadow: '0 8px 32px rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.08)', backdropFilter: 'blur(10px)' }}>
+          <div style={{ background: 'linear-gradient(135deg,#dbeafe,#ede9fe)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
+            <p style={{ color: '#1e40af', fontWeight: '800', fontSize: '14px', margin: '0 0 2px' }}>Selamat Belajar! 🎓</p>
+            <p style={{ color: '#3730a3', fontSize: '11px', margin: 0 }}>Terus semangat, raih masa depanmu!</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            {[{ icon: '📚', label: 'Materi' }, { icon: '📝', label: 'Quiz' }, { icon: '💬', label: 'Diskusi' }].map((item, i) => (
+              <div key={i} style={{ background: 'white', borderRadius: '10px', padding: '10px 6px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: '20px', marginBottom: '4px' }}>{item.icon}</div>
+                <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '600' }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Book stack */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignSelf: 'flex-start', marginTop: '20px', marginLeft: '0' }}>
+          {[{ color: '#3b82f6', label: 'INFORMATIKA' }, { color: '#6366f1', label: 'MATEMATIKA' }, { color: '#8b5cf6', label: 'BAHASA INDONESIA' }, { color: '#06b6d4', label: 'FISIKA' }].map((b, i) => (
+            <div key={i} style={{ background: b.color, borderRadius: '6px', padding: '5px 14px', color: 'white', fontSize: '10px', fontWeight: '800', letterSpacing: '0.5px', boxShadow: '2px 2px 8px rgba(0,0,0,0.15)' }}>{b.label}</div>
+          ))}
+        </div>
       </div>
-      <Footer />
+
+      {/* Footer */}
+      <div style={{ width: '100%', padding: '16px', textAlign: 'center', borderTop: '1px solid rgba(37,99,235,0.1)', background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(10px)' }}>
+        <p style={{ color: '#64748b', fontSize: '11px', margin: 0, fontWeight: '600' }}>Development By Restuadi G. Sinaga, S.Kom</p>
+      </div>
     </div>
   );
 
@@ -1379,10 +1504,15 @@ function App() {
           </button>
         ))}
       </div>
-      {/* Settings shortcut */}
-      <button onClick={() => setPage('adminSettings')} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '13px', cursor: 'pointer', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-        ⚙️ Pengaturan Aplikasi →
-      </button>
+      {/* Quick access row */}
+      <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '12px' }}>
+        <button onClick={() => setPage('adminSettings')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '12px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          ⚙️ Pengaturan
+        </button>
+        <button onClick={() => { setAdminTab('mapel'); loadMapelAdmin(); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: adminTab === 'mapel' ? 'none' : '1px solid #e2e8f0', background: adminTab === 'mapel' ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'white', color: adminTab === 'mapel' ? 'white' : '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          📐 Kelola Mapel
+        </button>
+      </div>
       {adminLoading && <LoadingSpinner />}
 
       {adminTab === 'pending' && !adminLoading && (
@@ -1610,6 +1740,48 @@ function App() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── TAB KELOLA MAPEL ── */}
+      {adminTab === 'mapel' && (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#6366f1', fontWeight: '800', fontSize: '15px', marginBottom: '4px' }}>📐 Kelola Mata Pelajaran</p>
+          <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px' }}>Ubah nama mapel & assign guru pengampu</p>
+          {mapelLoading && <LoadingSpinner />}
+          {mapelEditList.map((m, idx) => (
+            <div key={idx} style={{ ...S.card, border: '1px solid #ede9fe' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '20px' }}>{m.icon || '📚'}</span>
+                <input
+                  style={{ ...S.input, marginBottom: 0, flex: 1, fontSize: '14px', fontWeight: '700', color: '#0f172a' }}
+                  value={m.nama}
+                  onChange={e => ubahNamaMapel(idx, e.target.value)}
+                  onBlur={() => simpanNamaMapel(idx)}
+                />
+              </div>
+              <label style={S.label}>Guru Pengampu</label>
+              <select style={{ ...S.select, marginBottom: 0 }}
+                value={m.guruId || ''}
+                onChange={e => assignGuruKeMapel(idx, e.target.value)}>
+                <option value="">— Belum ada guru —</option>
+                {guruListForMapel.map(g => (
+                  <option key={g.uid} value={g.uid}>{g.nama} ({g.mapel})</option>
+                ))}
+              </select>
+              {m.guruNama && (
+                <p style={{ color: '#6366f1', fontSize: '12px', fontWeight: '600', marginTop: '6px', margin: '6px 0 0' }}>
+                  ✅ Pengampu: {m.guruNama}
+                </p>
+              )}
+            </div>
+          ))}
+          {mapelEditList.length === 0 && !mapelLoading && (
+            <div style={{ ...S.card, textAlign: 'center' }}>
+              <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '12px' }}>Data mapel belum dimuat.</p>
+              <button onClick={loadMapelAdmin} style={{ ...S.btnOrange, marginTop: 0 }}>📐 Muat Data Mapel</button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1870,24 +2042,24 @@ function App() {
       <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '430px', height: '180px', background: 'radial-gradient(ellipse at top,rgba(0,80,200,0.12) 0%,transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
       <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
         <TopBar />
-        <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', border: '1px solid #93c5fd', borderRadius: '20px', padding: '16px 18px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(12px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0 }}>
+        <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', borderRadius: '20px', padding: '18px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 8px 28px rgba(37,99,235,0.35)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', border: '2.5px solid rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>
               {userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓')}
             </div>
             <div>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 2px', textTransform: 'uppercase' }}>{userRole === 'guru' ? 'Guru' : `Kelas ${userData?.kelas}${userData?.jurusan}`}</p>
-              <p style={{ color: 'white', fontSize: '14px', fontWeight: '800', margin: 0 }}>{userData?.nama}</p>
+              <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 3px', textTransform: 'uppercase' }}>{userRole === 'guru' ? 'Guru' : `Kelas ${userData?.kelas}${userData?.jurusan}`}</p>
+              <p style={{ color: 'white', fontSize: '16px', fontWeight: '800', margin: 0, letterSpacing: '0.3px' }}>{userData?.nama}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <div onClick={() => { setEditBioForm({ bio: userData?.bio||'', citaCita: userData?.citaCita||'', hobby: userData?.hobby||'' }); setSelectedAvatar(userData?.avatar||''); setPengaturanMsg(''); setPage('pengaturan'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
-              <div style={{ fontSize: '16px' }}>⚙️</div>
-              <div style={{ fontSize: '8px', color: 'rgba(130,200,255,0.5)' }}>Setelan</div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div onClick={() => { setEditBioForm({ bio: userData?.bio||'', citaCita: userData?.citaCita||'', hobby: userData?.hobby||'' }); setSelectedAvatar(userData?.avatar||''); setPengaturanMsg(''); setPage('pengaturan'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '8px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.15)' }}>
+              <div style={{ fontSize: '18px' }}>⚙️</div>
+              <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: '2px' }}>Setelan</div>
             </div>
-            <div onClick={() => { loadAbout(); setPage('about'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '6px 8px', borderRadius: '10px', background: 'rgba(0,200,255,0.08)' }}>
-              <div style={{ fontSize: '16px' }}>ℹ️</div>
-              <div style={{ fontSize: '8px', color: 'rgba(130,200,255,0.5)' }}>Tentang</div>
+            <div onClick={() => { loadAbout(); setPage('about'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '8px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.15)' }}>
+              <div style={{ fontSize: '18px' }}>ℹ️</div>
+              <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: '2px' }}>Tentang</div>
             </div>
           </div>
         </div>
@@ -1905,24 +2077,29 @@ function App() {
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginBottom: '14px' }}>
           {[
-            { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', glow: 'rgba(139,92,246,0.35)', to: 'forum' },
-            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,#3b82f6,#2563eb)', glow: 'rgba(59,130,246,0.35)', to: 'daftarSiswa' },
-            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,#ef4444,#dc2626)', glow: 'rgba(239,68,68,0.35)', to: 'daftarGuru' },
-            { label: 'Perpustakaan', icon: '📚', grad: 'linear-gradient(135deg,#10b981,#059669)', glow: 'rgba(16,185,129,0.35)', to: '' },
-            { label: 'Ujian Sekolah', icon: '📋', grad: 'linear-gradient(135deg,#f97316,#ea580c)', glow: 'rgba(249,115,22,0.35)', to: '' },
-            { label: 'Pesan',         icon: '💬', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)', glow: 'rgba(6,182,212,0.35)', to: '' },
+            { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', glow: 'rgba(139,92,246,0.3)', to: 'forum' },
+            { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,#3b82f6,#2563eb)', glow: 'rgba(59,130,246,0.3)', to: 'daftarSiswa' },
+            { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,#ef4444,#dc2626)', glow: 'rgba(239,68,68,0.3)', to: 'daftarGuru' },
+            { label: 'Perpustakaan', icon: '📚', grad: 'linear-gradient(135deg,#10b981,#059669)', glow: 'rgba(16,185,129,0.3)', to: '' },
+            { label: 'Ujian Sekolah', icon: '📋', grad: 'linear-gradient(135deg,#f97316,#ea580c)', glow: 'rgba(249,115,22,0.3)', to: '' },
+            { label: 'Pesan',         icon: '💬', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)', glow: 'rgba(6,182,212,0.3)', to: '' },
           ].map((m, i) => (
             <button key={i} onClick={() => {
               if (m.to === 'daftarGuru') { loadSemuaGuru(); setPage('daftarGuru'); }
               else if (m.to) setPage(m.to);
             }}
-              style={{ padding: '18px 14px', borderRadius: '18px', border: 'none', background: m.grad, color: 'white', fontWeight: '600', fontSize: '14px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', boxShadow: `0 4px 16px ${m.glow}`, opacity: m.to ? 1 : 0.5, textAlign: 'left', borderRadius: '16px', padding: '18px 14px' }}>
-              <span style={{ fontSize: '24px' }}>{m.icon}</span>
-              <span style={{ lineHeight: '1.2' }}>{m.label}</span>
+              style={{ padding: '20px 16px 16px', borderRadius: '20px', border: 'none', background: m.grad, color: 'white', fontWeight: '700', fontSize: '15px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', boxShadow: `0 6px 20px ${m.glow}`, opacity: m.to ? 1 : 0.55, textAlign: 'left', minHeight: '110px', position: 'relative', overflow: 'hidden' }}>
+              {/* Dot pattern decoration */}
+              <div style={{ position: 'absolute', top: '8px', right: '8px', width: '40px', height: '40px', backgroundImage: 'radial-gradient(circle,rgba(255,255,255,0.25) 1px,transparent 1px)', backgroundSize: '8px 8px', borderRadius: '8px' }} />
+              <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>{m.icon}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'white' }}>{m.label}</span>
+                <div style={{ width: '24px', height: '24px', background: 'rgba(255,255,255,0.25)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>›</div>
+              </div>
             </button>
           ))}
         </div>
-        <button onClick={logout} style={{ width: '100%', padding: '13px', background: 'white', border: '1.5px solid #fee2e2', color: '#ef4444', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        <button onClick={logout} style={{ width: '100%', padding: '14px', background: 'white', border: '1.5px solid #fecaca', color: '#ef4444', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: '700', boxShadow: '0 2px 8px rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           🚪 Keluar / Logout
         </button>
       </div>
@@ -1937,7 +2114,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>Forum Belajar Online</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '800', marginBottom: '4px' }}>Forum Belajar Online</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', letterSpacing: '0.5px' }}>Pilih Mata Pelajaran</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%' }}>
         {mapelList.map(m => {
@@ -2846,7 +3023,7 @@ function App() {
         </div>
 
         {/* Logout */}
-        <button onClick={logout} style={{ width: '100%', padding: '13px', background: 'white', border: '1.5px solid #fee2e2', color: '#ef4444', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginTop: '4px' }}>
+        <button onClick={logout} style={{ width: '100%', padding: '14px', background: 'white', border: '1.5px solid #fecaca', color: '#ef4444', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: '700', boxShadow: '0 2px 8px rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '4px' }}>
           🚪 Keluar / Logout
         </button>
       </div>
@@ -3013,33 +3190,76 @@ function App() {
           {diskusiList.map((d, i) => {
             const isMine = d.pengirimId === userData?.uid;
             const isGuru = d.pengirimRole === 'guru';
+            const isActionActive = diskusiActionId === d.id;
+            const canAct = isMine || userRole === 'guru';
             return (
               <div key={d.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                 {/* Nama & role */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexDirection: isMine ? 'row-reverse' : 'row' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isGuru ? 'linear-gradient(135deg,#0055cc,#0099ff)' : 'linear-gradient(135deg,rgba(150,100,0,0.6),rgba(100,60,0,0.8))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isGuru ? 'linear-gradient(135deg,#2563eb,#3b82f6)' : 'linear-gradient(135deg,#f59e0b,#d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }}>
                     {isGuru ? '👨‍🏫' : '🎓'}
                   </div>
-                  <span style={{ fontSize: '11px', color: isGuru ? '#00c8ff' : 'rgba(255,200,0,0.7)', fontWeight: '700' }}>
-                    {d.pengirimNama} {isGuru ? '· Guru' : ''}
+                  <span style={{ fontSize: '11px', color: isGuru ? '#2563eb' : '#d97706', fontWeight: '700' }}>
+                    {d.pengirimNama}{isGuru ? ' · Guru' : ''}
                   </span>
-                  <span style={{ fontSize: '10px', color: 'rgba(150,180,220,0.4)' }}>{formatWaktu(d.timestamp)}</span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>{formatWaktu(d.timestamp)}</span>
+                  {d.diedit && <span style={{ fontSize: '9px', color: '#94a3b8' }}>· diedit</span>}
                 </div>
 
-                {/* Bubble */}
-                <div style={{ position: 'relative', maxWidth: '82%' }}>
-                  <div style={{ padding: '10px 14px', borderRadius: isMine ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: isMine ? 'linear-gradient(135deg,rgba(0,100,200,0.5),rgba(0,60,150,0.7))' : isGuru ? 'linear-gradient(135deg,rgba(0,80,160,0.4),rgba(0,50,120,0.6))' : 'rgba(255,255,255,0.06)', border: isMine ? '1px solid rgba(0,200,255,0.25)' : isGuru ? '1px solid rgba(0,150,255,0.2)' : '1px solid rgba(255,255,255,0.08)', wordBreak: 'break-word' }}>
-                    <p style={{ color: 'white', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{d.pesan}</p>
+                {/* Edit mode */}
+                {diskusiEditId === d.id ? (
+                  <div style={{ maxWidth: '85%', width: '100%' }}>
+                    <textarea style={{ ...S.input, height: '70px', resize: 'none', fontSize: '14px', marginBottom: '6px' }}
+                      value={diskusiEditText}
+                      onChange={e => setDiskusiEditText(e.target.value)}
+                      autoFocus />
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={() => editDiskusi(d.id, diskusiEditText)}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                        💾 Simpan
+                      </button>
+                      <button onClick={() => { setDiskusiEditId(null); setDiskusiActionId(null); }}
+                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: '12px', cursor: 'pointer' }}>
+                        Batal
+                      </button>
+                    </div>
                   </div>
+                ) : (
+                  <div style={{ maxWidth: '82%' }}>
+                    {/* Bubble — long press untuk aksi */}
+                    <div
+                      onTouchStart={() => canAct && handleLongPressStart(d)}
+                      onTouchEnd={handleLongPressEnd}
+                      onMouseDown={() => canAct && handleLongPressStart(d)}
+                      onMouseUp={handleLongPressEnd}
+                      onMouseLeave={handleLongPressEnd}
+                      style={{ padding: '10px 14px', borderRadius: isMine ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: isMine ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : isGuru ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'white', border: isMine ? 'none' : isGuru ? 'none' : '1px solid #e2e8f0', wordBreak: 'break-word', boxShadow: isMine ? '0 2px 8px rgba(37,99,235,0.25)' : isGuru ? '0 2px 8px rgba(99,102,241,0.2)' : '0 2px 8px rgba(0,0,0,0.06)', cursor: canAct ? 'pointer' : 'default', userSelect: 'none' }}>
+                      <p style={{ color: isMine || isGuru ? 'white' : '#0f172a', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{d.pesan}</p>
+                    </div>
+                    {/* Hint tahan lama */}
+                    {canAct && <p style={{ fontSize: '9px', color: '#94a3b8', margin: '3px 0 0', textAlign: isMine ? 'right' : 'left' }}>Tahan untuk {isMine || userRole === 'guru' ? 'edit' : ''}{userRole === 'guru' && !isMine ? '/hapus' : ''}</p>}
+                  </div>
+                )}
 
-                  {/* Tombol hapus */}
-                  {(isMine || userRole === 'guru') && (
-                    <button onClick={() => hapusDiskusi(d.id, d.pengirimId)}
-                      style={{ position: 'absolute', top: '-6px', right: isMine ? 'auto' : '-6px', left: isMine ? '-6px' : 'auto', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(200,30,30,0.8)', border: 'none', color: 'white', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                {/* Action menu saat long press */}
+                {isActionActive && diskusiEditId !== d.id && (
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexDirection: isMine ? 'row-reverse' : 'row' }}>
+                    <button onClick={() => { setDiskusiEditId(d.id); }}
+                      style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#2563eb', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                      ✏️ Edit
+                    </button>
+                    {(userRole === 'guru') && (
+                      <button onClick={() => hapusDiskusi(d.id, d.pengirimId)}
+                        style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                        🗑️ Hapus
+                      </button>
+                    )}
+                    <button onClick={() => setDiskusiActionId(null)}
+                      style={{ padding: '7px 12px', borderRadius: '20px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: '12px', cursor: 'pointer' }}>
                       ✕
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -3142,7 +3362,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="daftarSiswaKelas" />
-      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👥 Kelas {daftarSiswaTingkat}{daftarSiswaJurusan}</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👥 Kelas {daftarSiswaTingkat}{daftarSiswaJurusan}</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px', letterSpacing: '0.5px' }}>
         {daftarLoading ? 'Memuat...' : `${daftarSiswaList.length} siswa · urut poin tertinggi`}
       </p>
@@ -3341,7 +3561,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👨‍🏫 Daftar Guru</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👨‍🏫 Daftar Guru</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px', letterSpacing: '0.5px' }}>
         {daftarLoading ? 'Memuat...' : `${daftarGuruList.length} guru aktif`}
       </p>
@@ -3358,7 +3578,7 @@ function App() {
             {g.avatar || '👨‍🏫'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: 'white' }}>{g.namaPanggilan || g.nama}</p>
+            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.namaPanggilan || g.nama}</p>
             <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 1px', fontWeight: '600' }}>{g.mapel}</p>
             <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>{g.jabatan}</p>
           </div>
