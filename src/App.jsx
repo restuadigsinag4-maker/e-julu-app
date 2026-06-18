@@ -141,6 +141,7 @@ function App() {
   const [mapelEditList, setMapelEditList] = useState([]);
   const [mapelLoading, setMapelLoading] = useState(false);
   const [guruListForMapel, setGuruListForMapel] = useState([]);
+  const [mapelFirestore, setMapelFirestore] = useState([]); // mapel dari Firestore (termasuk custom)
 
   // ── UJIAN STATE ───────────────────────────────────────────────
   const [ujianList, setUjianList] = useState([]);
@@ -201,38 +202,73 @@ function App() {
   const jenisUjianList = ['UTS','UAS','Mid Semester','Semester Ganjil','Semester Genap','Ujian Harian','Try Out'];
 
 
-  // ── Android Back Button Fix ──────────────────────────────────
+  // ── Android Back Button — persis seperti tombol Kembali di app ──
+  const pageRef = React.useRef('splash');
   useEffect(() => {
-    const handleBack = (e) => {
-      e.preventDefault();
-      // Navigasi back berdasarkan halaman saat ini
+    pageRef.current = page;
+  }, [page]);
+
+  useEffect(() => {
+    // Push dummy state setiap kali halaman berubah
+    window.history.pushState({ page }, '', window.location.href);
+  }, [page]);
+
+  useEffect(() => {
+    const handleBack = () => {
+      const cur = pageRef.current;
+      // Mapping: setiap halaman -> halaman sebelumnya (sama dgn tombol Kembali di app)
       const backMap = {
-        dashboard: null, // jangan logout, biarkan di dashboard
-        forum: 'dashboard', forumPilihKelas: 'forum', forumBab: 'forum',
-        forumIsiBab: 'forumBab', quiz: 'forumIsiBab', guruBuatQuiz: 'forumIsiBab',
-        guruKelola: 'forumIsiBab', diskusi: 'forumIsiBab',
-        daftarSiswa: 'dashboard', daftarSiswaKelas: 'daftarSiswa',
-        daftarSiswaList: 'daftarSiswaKelas', leaderboard: 'daftarSiswa',
-        profilSiswa: 'daftarSiswaList', daftarGuru: 'dashboard', profilGuru: 'daftarGuru',
-        pengaturan: 'dashboard', about: 'dashboard', pesan: 'dashboard',
-        adminDashboard: 'role', adminDetailUser: 'adminDashboard',
-        adminSettings: 'adminDashboard', adminEditAbout: 'adminSettings',
+        // In-app navigation — TIDAK logout
+        dashboard: 'dashboard',         // tetap di dashboard (exit app behavior)
+        forum: 'dashboard',
+        forumPilihKelas: 'forum',
+        forumBab: 'forum',
+        forumIsiBab: 'forumBab',
+        quiz: 'forumIsiBab',
+        guruBuatQuiz: 'forumIsiBab',
+        guruKelola: 'forumIsiBab',
+        diskusi: 'forumIsiBab',
+        daftarSiswa: 'dashboard',
+        daftarSiswaKelas: 'daftarSiswa',
+        daftarSiswaList: 'daftarSiswaKelas',
+        leaderboard: 'daftarSiswa',
+        profilSiswa: 'daftarSiswaList',
+        daftarGuru: 'dashboard',
+        profilGuru: 'daftarGuru',
+        pengaturan: 'dashboard',
+        about: 'dashboard',
+        pesan: 'dashboard',
+        // Admin
+        adminDashboard: 'adminDashboard', // tetap (exit app)
+        adminDetailUser: 'adminDashboard',
+        adminSettings: 'adminDashboard',
+        adminEditAbout: 'adminSettings',
         adminKelolUjian: 'adminDashboard',
-        loginSiswa: 'menuSiswa', loginGuru: 'menuGuru',
-        menuSiswa: 'role', menuGuru: 'role',
-        registerSiswa: 'menuSiswa', registerGuru: 'menuGuru',
-        role: 'splash', menunggu: 'role', ditolak: 'role',
+        // Login & register
+        loginSiswa: 'menuSiswa',
+        loginGuru: 'menuGuru',
+        menuSiswa: 'role',
+        menuGuru: 'role',
+        registerSiswa: 'menuSiswa',
+        registerGuru: 'menuGuru',
+        // Halaman awal — ini yang boleh "exit"
+        role: 'splash',
+        menunggu: 'role',
+        ditolak: 'role',
+        splash: 'splash',              // sudah paling awal, tetap di sini
       };
-      setPage(prev => {
-        const backTo = backMap[prev];
-        if (backTo === null) return prev; // tetap di halaman, jangan logout
-        if (backTo === undefined) return prev;
-        return backTo;
-      });
+      const dest = backMap[cur];
+      if (dest && dest !== cur) {
+        // Navigasi ke halaman sebelumnya
+        window.history.pushState({ page: dest }, '', window.location.href);
+        setPage(dest);
+      } else {
+        // Sudah di halaman paling awal (splash/dashboard/adminDashboard)
+        // Biarkan Android handle sendiri (minimize app)
+        window.history.pushState(null, '', window.location.href);
+      }
     };
     window.addEventListener('popstate', handleBack);
-    // Push state agar popstate terpicu saat back ditekan
-    window.history.pushState(null, '', window.location.href);
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
 
@@ -374,6 +410,21 @@ function App() {
     } else {
       setQuizSoalIndex(pgSoal.length);
     }
+  };
+
+  // Load mapel dari Firestore untuk forum (termasuk mapel custom admin)
+  const loadMapelForForum = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'masterMapel'));
+      if (!snap.empty) {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (Number(a.urutan) || 999) - (Number(b.urutan) || 999));
+        setMapelFirestore(list);
+      } else {
+        // Belum ada di Firestore, pakai default
+        setMapelFirestore(mapelList.map(m => ({ ...m, id: 'mapel_' + m.id })));
+      }
+    } catch (e) { console.error(e); }
   };
 
   const loadBab = async (mapelNama) => {
@@ -1025,8 +1076,17 @@ function App() {
     setMapelLoading(true);
     try {
       const snap = await getDocs(collection(db, 'masterMapel'));
-      const list = snap.empty ? mapelList.map(m => ({ ...m, guruId: '', guruNama: '' })) : snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (!snap.empty) list.sort((a, b) => (a.urutan || a.id) - (b.urutan || b.id));
+      let list;
+      if (snap.empty) {
+        // Inisialisasi dari mapelList default — simpan ke Firestore
+        list = mapelList.map(m => ({ ...m, id: 'mapel_' + m.id, guruId: '', guruNama: '', urutan: m.id }));
+        for (const m of list) {
+          await setDoc(doc(db, 'masterMapel', m.id), m);
+        }
+      } else {
+        list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (Number(a.urutan) || 999) - (Number(b.urutan) || 999));
+      }
       setMapelEditList(list);
       const guruSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'guru'), where('status', '==', 'approved')));
       setGuruListForMapel(guruSnap.docs.map(d => d.data()));
@@ -1036,12 +1096,35 @@ function App() {
 
   const simpanMapel = async (mapelItem) => {
     try {
-      const id = mapelItem.id?.startsWith('mapel_') ? mapelItem.id : 'mapel_' + mapelItem.id;
-      await setDoc(doc(db, 'masterMapel', id), { ...mapelItem, id });
-      await catatAktivitas('EDIT_MAPEL', `${mapelItem.nama} → ${mapelItem.guruNama || '-'}`);
-      setAdminMsg('✅ Mapel disimpan!');
+      const id = mapelItem.id || ('mapel_' + Date.now());
+      const finalId = id.startsWith('mapel_') ? id : 'mapel_' + id;
+      const data = { ...mapelItem, id: finalId };
+      await setDoc(doc(db, 'masterMapel', finalId), data);
+      await catatAktivitas('EDIT_MAPEL', `${mapelItem.nama} → guru: ${mapelItem.guruNama || '-'}`);
+      setAdminMsg('✅ Mapel berhasil disimpan!');
       setTimeout(() => setAdminMsg(''), 2000);
-    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+    } catch (e) { setAdminMsg('❌ Gagal simpan: ' + e.message); }
+  };
+
+  const hapusMapelAdmin = async (mapelIdx) => {
+    const m = mapelEditList[mapelIdx];
+    if (!window.confirm(`Hapus mapel "${m.nama}"?`)) return;
+    try {
+      const id = m.id?.startsWith('mapel_') ? m.id : 'mapel_' + m.id;
+      await deleteDoc(doc(db, 'masterMapel', id));
+      const updated = mapelEditList.filter((_, i) => i !== mapelIdx);
+      setMapelEditList(updated);
+      await catatAktivitas('HAPUS_MAPEL', `Hapus mapel: ${m.nama}`);
+      setAdminMsg('🗑️ Mapel dihapus!');
+      setTimeout(() => setAdminMsg(''), 2000);
+    } catch (e) { setAdminMsg('❌ Gagal hapus: ' + e.message); }
+  };
+
+  const hapusGuruDariMapel = async (mapelIdx) => {
+    const updated = [...mapelEditList];
+    updated[mapelIdx] = { ...updated[mapelIdx], guruId: '', guruNama: '' };
+    setMapelEditList(updated);
+    await simpanMapel(updated[mapelIdx]);
   };
 
   const assignGuruKeMapel = async (idx, guruId) => {
@@ -1653,16 +1736,51 @@ function App() {
           {mapelLoading && <LoadingSpinner />}
           {mapelEditList.map((m, idx) => (
             <div key={idx} style={{ ...S.card, border: '1px solid #ede9fe' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '20px' }}>{m.icon || '📚'}</span>
-                <input style={{ ...S.input, marginBottom: 0, flex: 1, fontSize: '14px', fontWeight: '700' }} value={m.nama} onChange={e => ubahNamaMapel(idx, e.target.value)} onBlur={() => simpanNamaMapel(idx)} />
+              {/* Header: ikon + nama + hapus mapel */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '20px', flexShrink: 0 }}>{m.icon || '📚'}</span>
+                <input
+                  style={{ ...S.input, marginBottom: 0, flex: 1, fontSize: '14px', fontWeight: '700' }}
+                  value={m.nama}
+                  onChange={e => ubahNamaMapel(idx, e.target.value)}
+                />
+                <button onClick={() => hapusMapelAdmin(idx)}
+                  style={{ padding: '8px 10px', borderRadius: '8px', border: 'none', background: '#fee2e2', color: '#ef4444', fontSize: '14px', cursor: 'pointer', flexShrink: 0, fontWeight: '700' }}>
+                  🗑️
+                </button>
               </div>
+              {/* Guru Pengampu */}
               <label style={S.label}>Guru Pengampu</label>
-              <select style={{ ...S.select, marginBottom: 0 }} value={m.guruId || ''} onChange={e => assignGuruKeMapel(idx, e.target.value)}>
+              <select
+                style={{ ...S.select, marginBottom: '8px' }}
+                value={m.guruId || ''}
+                onChange={e => {
+                  const guru = guruListForMapel.find(g => g.uid === e.target.value);
+                  const updated = [...mapelEditList];
+                  updated[idx] = { ...updated[idx], guruId: e.target.value || '', guruNama: guru?.nama || '' };
+                  setMapelEditList(updated);
+                }}>
                 <option value="">— Belum ada guru —</option>
                 {guruListForMapel.map(g => <option key={g.uid} value={g.uid}>{g.nama} ({g.mapel})</option>)}
               </select>
-              {m.guruNama && <p style={{ color: '#6366f1', fontSize: '12px', fontWeight: '600', margin: '6px 0 0' }}>✅ {m.guruNama}</p>}
+              {/* Tombol aksi */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => simpanMapel(mapelEditList[idx])}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                  💾 Simpan
+                </button>
+                {m.guruId && (
+                  <button onClick={() => hapusGuruDariMapel(idx)}
+                    style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>
+                    👤 Hapus Guru
+                  </button>
+                )}
+              </div>
+              {m.guruNama && (
+                <p style={{ color: '#6366f1', fontSize: '12px', fontWeight: '600', margin: '8px 0 0' }}>
+                  ✅ Pengampu: {m.guruNama}
+                </p>
+              )}
             </div>
           ))}
           {mapelEditList.length === 0 && !mapelLoading && (
@@ -2390,6 +2508,17 @@ function App() {
   );
 
 
+  // Load mapel dari Firestore saat masuk dashboard atau forum
+  useEffect(() => {
+    if ((page === 'dashboard' || page === 'forum') && mapelFirestore.length === 0) {
+      loadMapelForForum();
+    }
+    if (page === 'forum') {
+      // Selalu reload saat buka forum agar mapel baru dari admin langsung muncul
+      loadMapelForForum();
+    }
+  }, [page]);
+
   if (page === 'dashboard') return (
     <div style={S.page}>
       <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '430px', height: '180px', background: 'radial-gradient(ellipse at top,rgba(37,99,235,0.1) 0%,transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
@@ -2469,17 +2598,18 @@ function App() {
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '800', marginBottom: '4px' }}>Forum Belajar Online</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih Mata Pelajaran</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%' }}>
-        {mapelList.map(m => {
+        {(mapelFirestore.length > 0 ? mapelFirestore : mapelList).map((m, mi) => {
           const bisaAkses = userRole === 'siswa' || userData?.mapel === m.nama;
+          const warna = m.warna || '#6366f1';
           return (
-            <button key={m.id} onClick={() => {
+            <button key={m.id || mi} onClick={() => {
               if (!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
               setSelectedMapel(m);
               if (userRole === 'siswa') { loadBab(m.nama); setSelectedKelas({ tingkat: userData.kelas, jurusan: userData.jurusan }); setPage('forumBab'); }
               else { setGuruPilihTingkat(null); setPage('forumPilihKelas'); }
             }}
-              style={{ padding: '16px 10px', borderRadius: '14px', border: 'none', background: bisaAkses ? `linear-gradient(135deg,${m.warna},${m.warna}99)` : '#f1f5f9', color: bisaAkses ? 'white' : '#94a3b8', fontWeight: 'bold', fontSize: '14px', cursor: bisaAkses ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', boxShadow: bisaAkses ? `0 4px 12px ${m.warna}44` : 'none', opacity: bisaAkses ? 1 : 0.5 }}>
-              <span style={{ fontSize: '28px' }}>{m.icon}</span>
+              style={{ padding: '16px 10px', borderRadius: '14px', border: 'none', background: bisaAkses ? `linear-gradient(135deg,${warna},${warna}99)` : '#f1f5f9', color: bisaAkses ? 'white' : '#94a3b8', fontWeight: 'bold', fontSize: '14px', cursor: bisaAkses ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', boxShadow: bisaAkses ? `0 4px 12px ${warna}44` : 'none', opacity: bisaAkses ? 1 : 0.5 }}>
+              <span style={{ fontSize: '28px' }}>{m.icon || '📚'}</span>
               <span style={{ textAlign: 'center', lineHeight: '1.3', fontSize: '13px' }}>{m.nama}</span>
               {!bisaAkses && <span style={{ fontSize: '11px' }}>🔒</span>}
             </button>
@@ -3561,23 +3691,37 @@ function AdminTambahMapel({ mapelEditList, setMapelEditList, guruListForMapel, s
   const [namaMapel, setNamaMapel] = React.useState('');
   const [iconMapel, setIconMapel] = React.useState('📚');
   const [warnaMapel, setWarnaMapel] = React.useState('#6366f1');
+  const [saving, setSaving] = React.useState(false);
   const iconOptions = ['📚','📐','🌐','⚡','🧪','🧬','🏛️','🌍','📊','👥','⚽','🎨','💻','🇮🇩','🕌','🗣️','🔬','📖','✏️','🎵'];
 
   const tambahMapelBaru = async () => {
     if (!namaMapel.trim()) { setAdminMsg('❌ Nama mapel wajib diisi!'); setTimeout(() => setAdminMsg(''), 2000); return; }
     const exists = mapelEditList.find(m => m.nama.toLowerCase() === namaMapel.trim().toLowerCase());
     if (exists) { setAdminMsg('❌ Mapel sudah ada!'); setTimeout(() => setAdminMsg(''), 2000); return; }
+    setSaving(true);
     try {
       const { setDoc, doc } = await import('firebase/firestore');
       const id = 'mapel_custom_' + Date.now();
-      const newMapel = { id, nama: namaMapel.trim(), icon: iconMapel, warna: warnaMapel, guruId: '', guruNama: '', urutan: mapelEditList.length + 1, custom: true };
+      const newMapel = {
+        id,
+        nama: namaMapel.trim(),
+        icon: iconMapel,
+        warna: warnaMapel,
+        guruId: '',
+        guruNama: '',
+        urutan: mapelEditList.length + 1,
+        custom: true,
+        createdAt: new Date().toISOString()
+      };
       await setDoc(doc(db, 'masterMapel', id), newMapel);
       setMapelEditList(prev => [...prev, newMapel]);
-      await catatAktivitas('TAMBAH_MAPEL', `Mapel baru: ${namaMapel}`);
-      setAdminMsg(`✅ Mapel "${namaMapel}" berhasil ditambahkan!`);
+      await catatAktivitas('TAMBAH_MAPEL', `Mapel baru: ${namaMapel} (${iconMapel})`);
+      setAdminMsg(`✅ Mapel "${namaMapel}" berhasil ditambahkan! Akan muncul di Forum Belajar.`);
       setNamaMapel('');
-      setTimeout(() => setAdminMsg(''), 3000);
+      setIconMapel('📚');
+      setTimeout(() => setAdminMsg(''), 4000);
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+    setSaving(false);
   };
 
   return (
@@ -3605,8 +3749,9 @@ function AdminTambahMapel({ mapelEditList, setMapelEditList, guruListForMapel, s
         <span style={{ fontSize: '24px' }}>{iconMapel}</span>
         <span style={{ fontWeight: '700', color: warnaMapel, fontSize: '14px' }}>{namaMapel || 'Nama Mapel'}</span>
       </div>
-      <button onClick={tambahMapelBaru} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-        ➕ Tambah Mapel ke Aplikasi
+      <button onClick={tambahMapelBaru} disabled={saving}
+        style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: saving ? '#94a3b8' : 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.8 : 1 }}>
+        {saving ? '⏳ Menyimpan...' : '➕ Tambah Mapel ke Aplikasi'}
       </button>
     </div>
   );
