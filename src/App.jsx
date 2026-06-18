@@ -14,7 +14,7 @@ import {
 
 // ── ADMIN CREDENTIALS ─────────────────────────────────────────
 const ADMIN_EMAIL = 'admin@ejulu.com';
-const ADMIN_PASSWORD = 'admin123';
+const ADMIN_PASSWORD = '*sman1JULU#';
 
 function App() {
   const [page, setPage] = useState('splash');
@@ -129,6 +129,17 @@ function App() {
   const [daftarSiswaTingkat, setDaftarSiswaTingkat] = useState(null);
   const [daftarSiswaJurusan, setDaftarSiswaJurusan] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+
+  // ── RBAC ADMIN STATE ──────────────────────────────────────────
+  const [auditLog, setAuditLog] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [tahunAjaranList, setTahunAjaranList] = useState([]);
+  const [kelasList, setKelasList] = useState([]);
+  const [masterLoading, setMasterLoading] = useState(false);
+  const [tahunAjaranForm, setTahunAjaranForm] = useState({ tahun: '', semester: '1', aktif: false });
+  const [kelasForm, setKelasForm] = useState({ tingkat: '10', jurusan: 'A', waliKelas: '' });
+  const [adminStats, setAdminStats] = useState(null);
+  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
 
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
@@ -764,6 +775,215 @@ function App() {
     setDiskusiList(prev => prev.filter(d => d.id !== pesanId));
   };
 
+  // ── RBAC: AUDIT TRAIL ────────────────────────────────────────
+  const catatAktivitas = async (aksi, detail = '') => {
+    try {
+      await addDoc(collection(db, 'auditLog'), {
+        aktor: 'Admin',
+        role: 'admin',
+        aksi,
+        detail,
+        timestamp: new Date(),
+        waktu: new Date().toLocaleString('id-ID')
+      });
+    } catch (e) { console.error('Audit log error:', e); }
+  };
+
+  const loadAuditLog = async () => {
+    setAuditLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'auditLog'));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => {
+        const ta = a.timestamp?.seconds || 0;
+        const tb = b.timestamp?.seconds || 0;
+        return tb - ta;
+      });
+      setAuditLog(list.slice(0, 100));
+    } catch (e) { console.error(e); }
+    setAuditLoading(false);
+  };
+
+  // ── RBAC: Override admin actions dengan audit trail ────────────
+  const approveUserRBAC = async (uid, nama) => {
+    await updateDoc(doc(db, 'users', uid), { status: 'approved' });
+    await catatAktivitas('APPROVE_USER', `Menyetujui akun: ${nama} (${uid})`);
+    setAdminMsg('✅ Akun berhasil disetujui!');
+    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const rejectUserRBAC = async (uid, nama) => {
+    await updateDoc(doc(db, 'users', uid), { status: 'rejected' });
+    await catatAktivitas('REJECT_USER', `Menolak akun: ${nama} (${uid})`);
+    setAdminMsg('❌ Akun berhasil ditolak!');
+    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const hapusUserRBAC = async (uid, nama) => {
+    if (!window.confirm('Yakin hapus user ini dari sistem?')) return;
+    await deleteDoc(doc(db, 'users', uid));
+    await catatAktivitas('DELETE_USER', `Menghapus akun: ${nama} (${uid})`);
+    setAdminMsg('🗑️ User berhasil dihapus!');
+    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+    setSelectedUser(null);
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const resetPasswordRBAC = async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      await catatAktivitas('RESET_PASSWORD', `Reset password: ${email}`);
+      setAdminMsg('📧 Email reset password terkirim ke ' + email);
+    } catch (e) {
+      setAdminMsg('❌ Gagal kirim email: ' + e.message);
+    }
+    setTimeout(() => setAdminMsg(''), 4000);
+  };
+
+  const simpanEditPoinRBAC = async (uid, nama) => {
+    const p = editPoinForm;
+    const updateData = {};
+    if (p.poinPG !== undefined) updateData.poinPG = Number(p.poinPG);
+    if (p.poinEssay !== undefined) updateData.poinEssay = Number(p.poinEssay);
+    if (p.poinModul !== undefined) updateData.poinModul = Number(p.poinModul);
+    if (p.poinUpload !== undefined) updateData.poinUpload = Number(p.poinUpload);
+    if (p.poinNilai !== undefined) updateData.poinNilai = Number(p.poinNilai);
+    if (p.pelanggaran !== undefined) updateData.pelanggaran = Number(p.pelanggaran);
+    await updateDoc(doc(db, 'users', uid), updateData);
+    await catatAktivitas('EDIT_POIN', `Edit poin ${nama}: PG=${updateData.poinPG||'-'} Essay=${updateData.poinEssay||'-'} Modul=${updateData.poinModul||'-'}`);
+    setAdminMsg('✅ Poin berhasil diperbarui!');
+    setAdminUsers(prev => prev.map(u => u.uid === uid ? { ...u, ...updateData } : u));
+    setSelectedUser(prev => ({ ...prev, ...updateData }));
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // ── RBAC: MANAJEMEN TAHUN AJARAN ──────────────────────────────
+  const loadTahunAjaran = async () => {
+    setMasterLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'tahunAjaran'));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => b.tahun.localeCompare(a.tahun));
+      setTahunAjaranList(list);
+    } catch (e) { console.error(e); }
+    setMasterLoading(false);
+  };
+
+  const tambahTahunAjaran = async () => {
+    if (!tahunAjaranForm.tahun.trim()) { setAdminMsg('❌ Tahun ajaran wajib diisi!'); return; }
+    try {
+      if (tahunAjaranForm.aktif) {
+        const snap = await getDocs(collection(db, 'tahunAjaran'));
+        for (const d of snap.docs) {
+          await updateDoc(doc(db, 'tahunAjaran', d.id), { aktif: false });
+        }
+      }
+      await addDoc(collection(db, 'tahunAjaran'), {
+        tahun: tahunAjaranForm.tahun.trim(),
+        semester: tahunAjaranForm.semester,
+        aktif: tahunAjaranForm.aktif,
+        createdAt: new Date()
+      });
+      await catatAktivitas('TAMBAH_TAHUN_AJARAN', `Menambah tahun ajaran: ${tahunAjaranForm.tahun} Sem ${tahunAjaranForm.semester}`);
+      setAdminMsg('✅ Tahun ajaran berhasil ditambahkan!');
+      setTahunAjaranForm({ tahun: '', semester: '1', aktif: false });
+      loadTahunAjaran();
+    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const hapusTahunAjaran = async (id, tahun) => {
+    if (!window.confirm('Hapus tahun ajaran ini?')) return;
+    await deleteDoc(doc(db, 'tahunAjaran', id));
+    await catatAktivitas('HAPUS_TAHUN_AJARAN', `Menghapus tahun ajaran: ${tahun}`);
+    setAdminMsg('🗑️ Tahun ajaran dihapus!');
+    loadTahunAjaran();
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const setAktifTahunAjaran = async (id, tahun) => {
+    const snap = await getDocs(collection(db, 'tahunAjaran'));
+    for (const d of snap.docs) {
+      await updateDoc(doc(db, 'tahunAjaran', d.id), { aktif: d.id === id });
+    }
+    await catatAktivitas('SET_AKTIF_TAHUN_AJARAN', `Mengaktifkan tahun ajaran: ${tahun}`);
+    setAdminMsg('✅ Tahun ajaran aktif diperbarui!');
+    loadTahunAjaran();
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // ── RBAC: MANAJEMEN KELAS ─────────────────────────────────────
+  const loadKelas = async () => {
+    setMasterLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'masterKelas'));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => `${a.tingkat}${a.jurusan}`.localeCompare(`${b.tingkat}${b.jurusan}`));
+      setKelasList(list);
+    } catch (e) { console.error(e); }
+    setMasterLoading(false);
+  };
+
+  const tambahKelas = async () => {
+    try {
+      const exists = kelasList.find(k => k.tingkat === kelasForm.tingkat && k.jurusan === kelasForm.jurusan);
+      if (exists) { setAdminMsg('❌ Kelas ini sudah ada!'); return; }
+      await addDoc(collection(db, 'masterKelas'), {
+        tingkat: kelasForm.tingkat,
+        jurusan: kelasForm.jurusan,
+        waliKelas: kelasForm.waliKelas.trim(),
+        createdAt: new Date()
+      });
+      await catatAktivitas('TAMBAH_KELAS', `Menambah kelas: ${kelasForm.tingkat}${kelasForm.jurusan} - Wali: ${kelasForm.waliKelas}`);
+      setAdminMsg('✅ Kelas berhasil ditambahkan!');
+      setKelasForm({ tingkat: '10', jurusan: 'A', waliKelas: '' });
+      loadKelas();
+    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  const hapusKelas = async (id, label) => {
+    if (!window.confirm(`Hapus kelas ${label}?`)) return;
+    await deleteDoc(doc(db, 'masterKelas', id));
+    await catatAktivitas('HAPUS_KELAS', `Menghapus kelas: ${label}`);
+    setAdminMsg('🗑️ Kelas dihapus!');
+    loadKelas();
+    setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // ── RBAC: STATISTIK DASHBOARD ─────────────────────────────────
+  const loadAdminStats = async () => {
+    setAdminStatsLoading(true);
+    try {
+      const userSnap = await getDocs(collection(db, 'users'));
+      const users = userSnap.docs.map(d => d.data());
+      const siswaAktif = users.filter(u => u.role === 'siswa' && u.status === 'approved');
+      const guruAktif = users.filter(u => u.role === 'guru' && u.status === 'approved');
+      const pending = users.filter(u => u.status === 'pending');
+
+      const diskusiSnap = await getDocs(collection(db, 'diskusi'));
+      const quizSnap = await getDocs(collection(db, 'hasilQuiz'));
+
+      const totalPoin = siswaAktif.reduce((acc, s) => acc + (s.poinPG||0) + (s.poinEssay||0) + (s.poinModul||0), 0);
+      const avgPoin = siswaAktif.length ? Math.round(totalPoin / siswaAktif.length) : 0;
+
+      await catatAktivitas('LIHAT_STATISTIK', `Membuka dashboard statistik`);
+
+      setAdminStats({
+        siswaAktif: siswaAktif.length,
+        guruAktif: guruAktif.length,
+        pending: pending.length,
+        totalDiskusi: diskusiSnap.size,
+        totalQuiz: quizSnap.size,
+        avgPoin,
+        totalUser: users.length,
+      });
+    } catch (e) { console.error(e); }
+    setAdminStatsLoading(false);
+  };
+
   // ── Logout ─────────────────────────────────────────────────────
   const logout = async () => {
     await signOut(auth);
@@ -1109,22 +1329,60 @@ function App() {
         <button onClick={() => setPage('role')} style={{ background: 'none', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer', fontSize: '13px' }}>🚪 Keluar</button>
       </div>
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', width: '100%', marginBottom: '16px' }}>
+      {/* Stats cards */}
+      {adminStats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', width: '100%', marginBottom: '14px' }}>
+          {[
+            { label: 'Siswa', val: adminStats.siswaAktif, icon: '🎓', color: '#3b82f6' },
+            { label: 'Guru', val: adminStats.guruAktif, icon: '👨‍🏫', color: '#10b981' },
+            { label: 'Pending', val: adminStats.pending, icon: '⏳', color: '#f59e0b' },
+            { label: 'Diskusi', val: adminStats.totalDiskusi, icon: '💬', color: '#8b5cf6' },
+            { label: 'Quiz', val: adminStats.totalQuiz, icon: '📝', color: '#ef4444' },
+            { label: 'Avg Poin', val: adminStats.avgPoin, icon: '🏆', color: '#06b6d4' },
+          ].map((s, i) => (
+            <div key={i} style={{ background: 'white', borderRadius: '12px', padding: '12px 10px', textAlign: 'center', border: `1px solid ${s.color}22`, boxShadow: `0 2px 8px ${s.color}15` }}>
+              <div style={{ fontSize: '20px', marginBottom: '2px' }}>{s.icon}</div>
+              <div style={{ fontSize: '18px', fontWeight: '900', color: s.color }}>{s.val}</div>
+              <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', letterSpacing: '0.3px' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', width: '100%', marginBottom: '8px' }}>
         {[
-          { key: 'pending',  label: '⏳ Pending',  warna: '#f39c12' },
-          { key: 'all',      label: '👥 Semua',    warna: '#2980b9' },
-          { key: 'poin',     label: '🏆 Poin',     warna: '#8e44ad' },
-          { key: 'settings', label: '⚙️ Aplikasi', warna: '#1e8449' },
+          { key: 'pending',  label: '⏳ Pending',  warna: '#f59e0b' },
+          { key: 'all',      label: '👥 Semua',    warna: '#3b82f6' },
+          { key: 'poin',     label: '🏆 Poin',     warna: '#8b5cf6' },
         ].map(t => (
           <button key={t.key} onClick={() => {
             setAdminTab(t.key);
-            if (t.key === 'settings') { setPage('adminSettings'); return; }
             loadAdminUsers(t.key === 'poin' ? 'approved' : t.key);
-          }} style={{ padding: '10px 4px', borderRadius: '8px', border: 'none', fontSize: '11px', background: adminTab === t.key ? t.warna : 'rgba(255,255,255,0.08)', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
+          }} style={{ padding: '10px 4px', borderRadius: '10px', border: 'none', fontSize: '11px', background: adminTab === t.key ? t.warna : '#f1f5f9', color: adminTab === t.key ? 'white' : '#64748b', fontWeight: '700', cursor: 'pointer' }}>
             {t.label}
           </button>
         ))}
       </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', width: '100%', marginBottom: '16px' }}>
+        {[
+          { key: 'statistik', label: '📊 Statistik', warna: '#06b6d4' },
+          { key: 'master',    label: '🏫 Master',    warna: '#10b981' },
+          { key: 'audit',     label: '📋 Log',       warna: '#64748b' },
+        ].map(t => (
+          <button key={t.key} onClick={() => {
+            setAdminTab(t.key);
+            if (t.key === 'statistik') loadAdminStats();
+            if (t.key === 'audit') loadAuditLog();
+            if (t.key === 'master') { loadTahunAjaran(); loadKelas(); }
+          }} style={{ padding: '10px 4px', borderRadius: '10px', border: 'none', fontSize: '11px', background: adminTab === t.key ? t.warna : '#f1f5f9', color: adminTab === t.key ? 'white' : '#64748b', fontWeight: '700', cursor: 'pointer' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {/* Settings shortcut */}
+      <button onClick={() => setPage('adminSettings')} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '13px', cursor: 'pointer', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        ⚙️ Pengaturan Aplikasi →
+      </button>
       {adminLoading && <LoadingSpinner />}
 
       {adminTab === 'pending' && !adminLoading && (
@@ -1141,9 +1399,9 @@ function App() {
               <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 6px' }}>{u.role === 'siswa' ? `NISN: ${u.nisn} | Agama: ${u.agama}` : `NIP/NIK: ${u.nip || u.nik} | Jabatan: ${u.jabatan}`}</p>
               <p style={{ color: '#475569', fontSize: '12px', margin: '0 0 10px' }}>📝 {u.bio}</p>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => approveUser(u.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>✅ Setujui</button>
-                <button onClick={() => rejectUser(u.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>❌ Tolak</button>
-                <button onClick={() => hapusUser(u.uid)} style={{ padding: '10px 14px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
+                <button onClick={() => approveUserRBAC(u.uid, u.nama)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>✅ Setujui</button>
+                <button onClick={() => rejectUserRBAC(u.uid, u.nama)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>❌ Tolak</button>
+                <button onClick={() => hapusUserRBAC(u.uid, u.nama)} style={{ padding: '10px 14px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
               </div>
             </div>
           ))}
@@ -1169,9 +1427,9 @@ function App() {
               <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
                 <button onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); setPage('adminDetailUser'); }}
                   style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>👁️ Detail</button>
-                <button onClick={() => resetPassword(u.email)}
+                <button onClick={() => resetPasswordRBAC(u.email)}
                   style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#8e44ad', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🔑 Reset PW</button>
-                <button onClick={() => hapusUser(u.uid)}
+                <button onClick={() => hapusUserRBAC(u.uid, u.nama)}
                   style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#c0392b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🗑️</button>
               </div>
             </div>
@@ -1200,6 +1458,158 @@ function App() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── TAB STATISTIK ── */}
+      {adminTab === 'statistik' && (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#06b6d4', fontWeight: '800', fontSize: '15px', marginBottom: '14px' }}>📊 Statistik Aplikasi</p>
+          {adminStatsLoading && <LoadingSpinner />}
+          {!adminStats && !adminStatsLoading && (
+            <div style={{ ...S.card, textAlign: 'center' }}>
+              <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '12px' }}>Klik tombol di bawah untuk memuat statistik terbaru.</p>
+              <button onClick={loadAdminStats} style={{ ...S.btnOrange, marginTop: 0 }}>📊 Muat Statistik</button>
+            </div>
+          )}
+          {adminStats && !adminStatsLoading && (
+            <>
+              {[
+                { label: '🎓 Siswa Aktif', val: adminStats.siswaAktif, color: '#3b82f6', sub: 'terdaftar & disetujui' },
+                { label: '👨‍🏫 Guru Aktif', val: adminStats.guruAktif, color: '#10b981', sub: 'terdaftar & disetujui' },
+                { label: '⏳ Menunggu Approval', val: adminStats.pending, color: '#f59e0b', sub: 'belum disetujui' },
+                { label: '💬 Total Pesan Diskusi', val: adminStats.totalDiskusi, color: '#8b5cf6', sub: 'semua kelas & bab' },
+                { label: '📝 Quiz Dikerjakan', val: adminStats.totalQuiz, color: '#ef4444', sub: 'total pengerjaan quiz' },
+                { label: '🏆 Rata-rata Poin Siswa', val: adminStats.avgPoin, color: '#06b6d4', sub: 'dari semua siswa aktif' },
+                { label: '👥 Total Pengguna', val: adminStats.totalUser, color: '#64748b', sub: 'semua role & status' },
+              ].map((s, i) => (
+                <div key={i} style={{ ...S.card, border: `1px solid ${s.color}33`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{s.label}</p>
+                    <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>{s.sub}</p>
+                  </div>
+                  <div style={{ fontSize: '28px', fontWeight: '900', color: s.color }}>{s.val}</div>
+                </div>
+              ))}
+              <button onClick={loadAdminStats} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: '600', fontSize: '13px', cursor: 'pointer', marginTop: '4px' }}>
+                🔄 Refresh Statistik
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB MASTER DATA ── */}
+      {adminTab === 'master' && (
+        <div style={{ width: '100%' }}>
+          <p style={{ color: '#10b981', fontWeight: '800', fontSize: '15px', marginBottom: '14px' }}>🏫 Master Data Sekolah</p>
+          {masterLoading && <LoadingSpinner />}
+
+          {/* Tahun Ajaran */}
+          <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
+            <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>📅 Tahun Ajaran</p>
+            {tahunAjaranList.length === 0 && !masterLoading && (
+              <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '12px' }}>Belum ada tahun ajaran.</p>
+            )}
+            {tahunAjaranList.map((t, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '10px', background: t.aktif ? '#f0fdf4' : '#f8fafc', border: `1px solid ${t.aktif ? '#86efac' : '#e2e8f0'}`, marginBottom: '8px' }}>
+                <div>
+                  <p style={{ fontWeight: '700', fontSize: '13px', margin: '0 0 1px', color: '#0f172a' }}>{t.tahun} · Sem {t.semester}</p>
+                  {t.aktif && <span style={{ fontSize: '10px', background: '#16a34a', color: 'white', padding: '2px 6px', borderRadius: '6px', fontWeight: '700' }}>AKTIF</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {!t.aktif && <button onClick={() => setAktifTahunAjaran(t.id, t.tahun)} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>✓ Aktifkan</button>}
+                  <button onClick={() => hapusTahunAjaran(t.id, t.tahun)} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#ef4444', color: 'white', fontSize: '11px', cursor: 'pointer' }}>🗑️</button>
+                </div>
+              </div>
+            ))}
+            {/* Form tambah */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '4px' }}>
+              <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>+ Tambah Tahun Ajaran</p>
+              <input style={{ ...S.input, marginBottom: '8px' }} placeholder="Contoh: 2025/2026" value={tahunAjaranForm.tahun} onChange={e => setTahunAjaranForm(p => ({ ...p, tahun: e.target.value }))} />
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <select style={{ ...S.select, marginBottom: 0, flex: 1 }} value={tahunAjaranForm.semester} onChange={e => setTahunAjaranForm(p => ({ ...p, semester: e.target.value }))}>
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                </select>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569', cursor: 'pointer', flexShrink: 0 }}>
+                  <input type="checkbox" checked={tahunAjaranForm.aktif} onChange={e => setTahunAjaranForm(p => ({ ...p, aktif: e.target.checked }))} />
+                  Jadikan aktif
+                </label>
+              </div>
+              <button onClick={tambahTahunAjaran} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                ✅ Tambah Tahun Ajaran
+              </button>
+            </div>
+          </div>
+
+          {/* Master Kelas */}
+          <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
+            <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>🏫 Daftar Kelas Aktif</p>
+            {kelasList.length === 0 && !masterLoading && (
+              <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '12px' }}>Belum ada kelas terdaftar.</p>
+            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: kelasList.length ? '12px' : 0 }}>
+              {kelasList.map((k, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '6px 10px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#4f46e5' }}>{k.tingkat}{k.jurusan}</span>
+                  {k.waliKelas && <span style={{ fontSize: '11px', color: '#64748b' }}>· {k.waliKelas}</span>}
+                  <button onClick={() => hapusKelas(k.id, `${k.tingkat}${k.jurusan}`)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px', padding: 0 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {/* Form tambah kelas */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+              <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>+ Tambah Kelas</p>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <select style={{ ...S.select, marginBottom: 0, flex: 1 }} value={kelasForm.tingkat} onChange={e => setKelasForm(p => ({ ...p, tingkat: e.target.value }))}>
+                  {['10','11','12'].map(t => <option key={t} value={t}>Kelas {t}</option>)}
+                </select>
+                <select style={{ ...S.select, marginBottom: 0, flex: 1 }} value={kelasForm.jurusan} onChange={e => setKelasForm(p => ({ ...p, jurusan: e.target.value }))}>
+                  {['A','B','C','D','E','F','G','H','I','J'].map(j => <option key={j} value={j}>{j}</option>)}
+                </select>
+              </div>
+              <input style={S.input} placeholder="Nama wali kelas (opsional)" value={kelasForm.waliKelas} onChange={e => setKelasForm(p => ({ ...p, waliKelas: e.target.value }))} />
+              <button onClick={tambahKelas} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#4f46e5,#4338ca)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                ✅ Tambah Kelas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB AUDIT TRAIL ── */}
+      {adminTab === 'audit' && (
+        <div style={{ width: '100%' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <p style={{ color: '#64748b', fontWeight: '800', fontSize: '15px', margin: 0 }}>📋 Audit Trail</p>
+            <button onClick={loadAuditLog} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>🔄 Refresh</button>
+          </div>
+          {auditLoading && <LoadingSpinner />}
+          {!auditLoading && auditLog.length === 0 && (
+            <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+              <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Belum ada log aktivitas.</p>
+            </div>
+          )}
+          {auditLog.map((log, i) => {
+            const getColor = (aksi) => {
+              if (aksi.includes('APPROVE')) return { bg: '#f0fdf4', border: '#86efac', text: '#16a34a' };
+              if (aksi.includes('REJECT') || aksi.includes('DELETE') || aksi.includes('HAPUS')) return { bg: '#fff1f2', border: '#fda4af', text: '#e11d48' };
+              if (aksi.includes('EDIT') || aksi.includes('SET')) return { bg: '#eff6ff', border: '#bfdbfe', text: '#2563eb' };
+              if (aksi.includes('TAMBAH')) return { bg: '#f0fdfa', border: '#99f6e4', text: '#0d9488' };
+              return { bg: '#f8fafc', border: '#e2e8f0', text: '#64748b' };
+            };
+            const c = getColor(log.aksi);
+            return (
+              <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '12px 14px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: c.text, background: c.border, padding: '2px 8px', borderRadius: '6px' }}>{log.aksi}</span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>{log.waktu || ''}</span>
+                </div>
+                {log.detail && <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.5' }}>{log.detail}</p>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1252,27 +1662,27 @@ function App() {
         )}
         <label style={S.label}>Pelanggaran</label>
         <input style={S.input} type="number" value={editPoinForm.pelanggaran} onChange={e => setEditPoinForm(p => ({ ...p, pelanggaran: e.target.value }))} />
-        <button onClick={() => simpanEditPoin(selectedUser.uid)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>💾 Simpan Poin</button>
+        <button onClick={() => simpanEditPoinRBAC(selectedUser.uid, selectedUser.nama)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e8449,#145a32)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>💾 Simpan Poin</button>
       </div>
 
       <div style={{ ...S.card, border: '1px solid #6c3483' }}>
         <p style={{ color: '#8e44ad', fontWeight: 'bold', marginBottom: '8px' }}>🔑 Reset Password</p>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '10px' }}>Email reset dikirim ke: <strong style={{ color: 'white' }}>{selectedUser.email}</strong></p>
-        <button onClick={() => resetPassword(selectedUser.email)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#6c3483,#4a235a)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>📧 Kirim Email Reset Password</button>
+        <button onClick={() => resetPasswordRBAC(selectedUser.email)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#6c3483,#4a235a)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>📧 Kirim Email Reset Password</button>
       </div>
 
       <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
         <p style={{ color: '#4f46e5', fontWeight: 'bold', marginBottom: '8px' }}>📊 Ubah Status</p>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => approveUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#1e8449', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>✅ Setujui</button>
-          <button onClick={() => rejectUser(selectedUser.uid)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#b7860b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🚫 Tolak</button>
+          <button onClick={() => approveUserRBAC(selectedUser.uid, selectedUser.nama)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#1e8449', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>✅ Setujui</button>
+          <button onClick={() => rejectUserRBAC(selectedUser.uid, selectedUser.nama)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#b7860b', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🚫 Tolak</button>
         </div>
       </div>
 
       <div style={{ ...S.card, border: '1px solid #e74c3c' }}>
         <p style={{ color: '#e74c3c', fontWeight: 'bold', marginBottom: '8px' }}>⚠️ Hapus dari Sistem</p>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '10px' }}>Tindakan ini tidak bisa dibatalkan!</p>
-        <button onClick={() => hapusUser(selectedUser.uid)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>🗑️ Hapus User Ini</button>
+        <button onClick={() => hapusUserRBAC(selectedUser.uid, selectedUser.nama)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#c0392b,#922b21)', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>🗑️ Hapus User Ini</button>
       </div>
     </div>
   );
