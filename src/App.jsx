@@ -626,12 +626,12 @@ function App() {
   };
 
   // ── DISKUSI FUNCTIONS ────────────────────────────────────────
-  const loadDiskusi = async (mapelNama, kelasLabel) => {
+  const loadDiskusi = async (babId, kelasLabel) => {
     setDiskusiLoading(true);
     try {
       const q = query(
         collection(db, 'diskusi'),
-        where('mapel', '==', mapelNama),
+        where('babId', '==', babId),
         where('kelas', '==', kelasLabel)
       );
       const snap = await getDocs(q);
@@ -646,13 +646,15 @@ function App() {
     setDiskusiLoading(false);
   };
 
-  const kirimDiskusi = async (mapelNama, kelasLabel) => {
+  const kirimDiskusi = async (babId, kelasLabel) => {
     if (!diskusiInput.trim()) return;
     const pesan = diskusiInput.trim();
     setDiskusiInput('');
     try {
       const docRef = await addDoc(collection(db, 'diskusi'), {
-        mapel: mapelNama,
+        babId,
+        mapel: selectedMapel?.nama || '',
+        babJudul: selectedBab?.judul || '',
         kelas: kelasLabel,
         pengirimId: userData.uid,
         pengirimNama: userData.nama,
@@ -662,7 +664,7 @@ function App() {
       });
       setDiskusiList(prev => [...prev, {
         id: docRef.id,
-        mapel: mapelNama,
+        babId,
         kelas: kelasLabel,
         pengirimId: userData.uid,
         pengirimNama: userData.nama,
@@ -1532,22 +1534,6 @@ function App() {
       </p>
       <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '12px', letterSpacing: '0.8px' }}>Pilih Bab Pembelajaran</p>
 
-      {/* Tombol Diskusi Online */}
-      <button onClick={() => {
-        const kelasLabel = `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`;
-        loadDiskusi(selectedMapel.nama, kelasLabel);
-        setPage('diskusi');
-      }} style={{ width: '100%', padding: '14px 18px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,rgba(0,160,200,0.5),rgba(0,100,160,0.8))', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', boxShadow: '0 4px 16px rgba(0,150,200,0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '22px' }}>💬</span>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: '800', fontSize: '14px' }}>Diskusi Online</div>
-            <div style={{ fontSize: '11px', color: 'rgba(180,230,255,0.7)', marginTop: '1px' }}>Tanya jawab kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}</div>
-          </div>
-        </div>
-        <span style={{ color: 'rgba(0,200,255,0.8)', fontSize: '20px' }}>›</span>
-      </button>
-
       <div style={{ width: '100%' }}>
         {babList.length === 0 && (
           <div style={{ ...S.card, textAlign: 'center', border: '1px solid rgba(0,180,255,0.15)' }}>
@@ -1731,6 +1717,21 @@ function App() {
                 </button>
               </div>
           }
+        </div>
+
+        {/* Diskusi Online per Bab */}
+        <div style={{ ...S.card, border: '1px solid rgba(0,160,220,0.3)' }}>
+          <p style={{ color: '#00c8ff', fontWeight: '700', marginBottom: '10px', fontSize: '15px' }}>💬 Diskusi Online</p>
+          <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '12px', marginBottom: '12px' }}>
+            Forum tanya jawab bab ini untuk kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}
+          </p>
+          <button onClick={() => {
+            const kelasLabel = `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`;
+            loadDiskusi(selectedBab.id, kelasLabel);
+            setPage('diskusi');
+          }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,rgba(0,120,200,0.6),rgba(0,70,150,0.9))', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,120,200,0.2)' }}>
+            <span style={{ fontSize: '18px' }}>💬</span> Buka Forum Diskusi
+          </button>
         </div>
       </div>
     </div>
@@ -2457,25 +2458,28 @@ function App() {
     return (
       <div style={{ ...S.page, paddingBottom: '120px' }}>
         <TopBar />
-        <BackBtn to="forumBab" />
+        <BackBtn to="forumIsiBab" />
 
         {/* Header */}
         <div style={{ width: '100%', background: 'linear-gradient(135deg,rgba(0,100,180,0.4),rgba(0,60,130,0.6))', border: '1px solid rgba(0,200,255,0.2)', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px' }}>
           <p style={{ color: '#00c8ff', fontWeight: '800', fontSize: '16px', margin: '0 0 2px' }}>💬 Diskusi Online</p>
-          <p style={{ color: 'rgba(150,210,255,0.65)', fontSize: '12px', margin: 0 }}>
-            {selectedMapel?.nama} · Kelas {kelasLabel}
+          <p style={{ color: 'rgba(150,210,255,0.65)', fontSize: '12px', margin: '0 0 2px' }}>
+            {selectedMapel?.nama} · {selectedBab?.judul}
+          </p>
+          <p style={{ color: 'rgba(150,210,255,0.5)', fontSize: '11px', margin: 0 }}>
+            Kelas {kelasLabel}
           </p>
         </div>
 
         {/* Info */}
         <div style={{ ...S.card, border: '1px solid rgba(0,200,255,0.1)', marginBottom: '8px', padding: '10px 14px' }}>
           <p style={{ color: 'rgba(150,200,255,0.55)', fontSize: '11px', margin: 0, letterSpacing: '0.5px' }}>
-            💡 Siswa & guru di kelas ini bisa saling bertanya dan menjawab. Tekan 🔄 untuk refresh pesan terbaru.
+            💡 Siswa & guru di kelas ini bisa saling bertanya dan menjawab tentang bab ini. Tekan 🔄 untuk lihat pesan terbaru.
           </p>
         </div>
 
         {/* Refresh button */}
-        <button onClick={() => loadDiskusi(selectedMapel.nama, kelasLabel)}
+        <button onClick={() => loadDiskusi(selectedBab.id, kelasLabel)}
           style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid rgba(0,200,255,0.2)', background: 'rgba(0,200,255,0.06)', color: '#00c8ff', fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginBottom: '16px' }}>
           🔄 Refresh Pesan Terbaru
         </button>
@@ -2537,7 +2541,7 @@ function App() {
               onChange={e => setDiskusiInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); kirimDiskusi(selectedMapel.nama, kelasLabel); } }}
             />
-            <button onClick={() => kirimDiskusi(selectedMapel.nama, kelasLabel)}
+            <button onClick={() => kirimDiskusi(selectedBab.id, kelasLabel)}
               disabled={!diskusiInput.trim()}
               style={{ width: '44px', height: '44px', borderRadius: '12px', border: 'none', background: diskusiInput.trim() ? 'linear-gradient(135deg,#0055cc,#0099ff)' : 'rgba(0,100,200,0.2)', color: 'white', fontSize: '18px', cursor: diskusiInput.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: diskusiInput.trim() ? '0 4px 14px rgba(0,130,255,0.4)' : 'none' }}>
               ➤
