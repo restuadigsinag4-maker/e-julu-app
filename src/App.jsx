@@ -209,66 +209,36 @@ function App() {
   }, [page]);
 
   useEffect(() => {
-    // Push dummy state setiap kali halaman berubah
-    window.history.pushState({ page }, '', window.location.href);
-  }, [page]);
-
-  useEffect(() => {
     const handleBack = () => {
       const cur = pageRef.current;
-      // Mapping: setiap halaman -> halaman sebelumnya (sama dgn tombol Kembali di app)
       const backMap = {
-        // In-app navigation — TIDAK logout
-        dashboard: 'dashboard',         // tetap di dashboard (exit app behavior)
-        forum: 'dashboard',
-        forumPilihKelas: 'forum',
-        forumBab: 'forum',
-        forumIsiBab: 'forumBab',
-        quiz: 'forumIsiBab',
-        guruBuatQuiz: 'forumIsiBab',
-        guruKelola: 'forumIsiBab',
-        diskusi: 'forumIsiBab',
-        daftarSiswa: 'dashboard',
-        daftarSiswaKelas: 'daftarSiswa',
-        daftarSiswaList: 'daftarSiswaKelas',
-        leaderboard: 'daftarSiswa',
-        profilSiswa: 'daftarSiswaList',
-        daftarGuru: 'dashboard',
-        profilGuru: 'daftarGuru',
-        pengaturan: 'dashboard',
-        about: 'dashboard',
-        pesan: 'dashboard',
-        // Admin
-        adminDashboard: 'adminDashboard', // tetap (exit app)
-        adminDetailUser: 'adminDashboard',
-        adminSettings: 'adminDashboard',
-        adminEditAbout: 'adminSettings',
+        dashboard: null, forum: 'dashboard', forumPilihKelas: 'forum',
+        forumBab: 'forum', forumIsiBab: 'forumBab', quiz: 'forumIsiBab',
+        guruBuatQuiz: 'forumIsiBab', guruKelola: 'forumIsiBab', diskusi: 'forumIsiBab',
+        daftarSiswa: 'dashboard', daftarSiswaKelas: 'daftarSiswa',
+        daftarSiswaList: 'daftarSiswaKelas', leaderboard: 'daftarSiswa',
+        profilSiswa: 'daftarSiswaList', daftarGuru: 'dashboard', profilGuru: 'daftarGuru',
+        pengaturan: 'dashboard', about: 'dashboard', pesan: 'dashboard',
+        adminDashboard: null, adminDetailUser: 'adminDashboard',
+        adminSettings: 'adminDashboard', adminEditAbout: 'adminSettings',
         adminKelolUjian: 'adminDashboard',
-        // Login & register
-        loginSiswa: 'menuSiswa',
-        loginGuru: 'menuGuru',
-        menuSiswa: 'role',
-        menuGuru: 'role',
-        registerSiswa: 'menuSiswa',
-        registerGuru: 'menuGuru',
-        // Halaman awal — ini yang boleh "exit"
-        role: 'splash',
-        menunggu: 'role',
-        ditolak: 'role',
-        splash: 'splash',              // sudah paling awal, tetap di sini
+        loginSiswa: 'menuSiswa', loginGuru: 'menuGuru',
+        menuSiswa: 'role', menuGuru: 'role',
+        registerSiswa: 'menuSiswa', registerGuru: 'menuGuru',
+        role: 'splash', menunggu: 'role', ditolak: 'role', splash: null,
       };
       const dest = backMap[cur];
-      if (dest && dest !== cur) {
-        // Navigasi ke halaman sebelumnya
-        window.history.pushState({ page: dest }, '', window.location.href);
+      if (dest) {
         setPage(dest);
+        window.history.pushState(null, '', window.location.href);
       } else {
-        // Sudah di halaman paling awal (splash/dashboard/adminDashboard)
-        // Biarkan Android handle sendiri (minimize app)
+        // null = halaman paling awal, biarkan browser/Android handle
         window.history.pushState(null, '', window.location.href);
       }
     };
     window.addEventListener('popstate', handleBack);
+    // Push initial state
+    window.history.pushState(null, '', window.location.href);
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
 
