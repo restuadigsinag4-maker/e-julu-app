@@ -5,11 +5,14 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, collection,
-  getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy, arrayUnion, arrayRemove
+  getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy
 } from 'firebase/firestore';
 
 function App() {
@@ -98,7 +101,8 @@ function App() {
   // Pengaturan
   const [pengaturanMsg, setPengaturanMsg] = useState('');
   const [editBioForm, setEditBioForm] = useState({ bio: '', citaCita: '', hobby: '' });
-  const [gantiPwForm, setGantiPwForm] = useState({ baru: '', konfirmasi: '' });
+  const [gantiPwForm, setGantiPwForm] = useState({ lama: '', baru: '', konfirmasi: '' });
+  const [showLamaPw, setShowLamaPw] = useState(false);
   const [showGantiPw, setShowGantiPw] = useState(false);
   const [showKonfirmasiPw, setShowKonfirmasiPw] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState('');
@@ -705,11 +709,14 @@ function App() {
   // yang sudah terdaftar SEBELUM fitur login yang lebih aman ini dipasang.
   // Aman dijalankan berkali-kali (skip yang sudah ada).
   const sinkronkanLoginIndex = async () => {
-    if (!window.confirm('Sinkronkan akun lama supaya bisa login lagi & dukung banyak mapel?')) return;
+    if (!window.confirm('Sinkronkan akun lama (login) & hitung ulang mapel semua guru dari awal?')) return;
     setMigrasiLoading(true);
     let dibuat = 0, dilewati = 0, mapelDiisi = 0;
     try {
       const snap = await getDocs(collection(db, 'users'));
+      const mapelSnap = await getDocs(collection(db, 'masterMapel'));
+      const semuaMapel = mapelSnap.docs.map(d => d.data());
+
       for (const d of snap.docs) {
         const u = d.data();
         if (!u.email) continue;
@@ -723,15 +730,17 @@ function App() {
           await setDoc(doc(db, 'loginIndex', key), { email: u.email });
           dibuat++;
         }
-        // Guru lama belum punya mapelList (array) — isi dari mapel tunggal yang sudah ada,
-        // supaya guru itu bisa langsung ditambah ke mapel lain tanpa kehilangan yang lama.
-        if (u.role === 'guru' && !Array.isArray(u.mapelList) && u.mapel) {
-          await updateDoc(doc(db, 'users', d.id), { mapelList: [u.mapel] });
+        // Hitung ULANG mapelList tiap guru langsung dari masterMapel (sumber kebenaran).
+        // Ini membenarkan sendiri data yang sempat berantakan dari versi sebelumnya.
+        if (u.role === 'guru') {
+          const dariMasterMapel = semuaMapel.filter(m => m.guruId === d.id).map(m => m.nama);
+          const finalList = dariMasterMapel.length > 0 ? dariMasterMapel : (u.mapel ? [u.mapel] : []);
+          await updateDoc(doc(db, 'users', d.id), { mapelList: finalList });
           mapelDiisi++;
         }
       }
-      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} login dibuat, ${mapelDiisi} mapelList diisi, ${dilewati} dilewati`);
-      setAdminMsg(`✅ Sinkron selesai! ${dibuat} akun login dipulihkan, ${mapelDiisi} guru dapat mapelList, ${dilewati} sudah OK sebelumnya.`);
+      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} login dibuat, ${mapelDiisi} mapelList dihitung ulang, ${dilewati} login dilewati`);
+      setAdminMsg(`✅ Sinkron selesai! ${dibuat} akun login dipulihkan, ${mapelDiisi} guru di-hitung ulang mapelnya, ${dilewati} login sudah OK sebelumnya.`);
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setMigrasiLoading(false);
     setTimeout(() => setAdminMsg(''), 5000);
@@ -801,28 +810,29 @@ function App() {
   // PENTING: akses guru ke Forum Belajar ditentukan dari field `mapel` di
   // PROFIL guru sendiri (users/{uid}.mapel), bukan dari kartu mapel ini.
   // Makanya assign guru di sini harus ikut nulis ke profil guru itu juga.
+  // Hitung ULANG mapelList satu guru, langsung dari masterMapel (sumber kebenaran
+  // tunggal: "siapa guruId di tiap kartu mapel"). Ini SELALU benar, gak akan pernah
+  // ketimpa/ketinggalan kayak pendekatan tambah-satu-satu sebelumnya.
+  const hitungUlangMapelGuru = async (guruId) => {
+    if (!guruId) return;
+    const qSnap = await getDocs(query(collection(db, 'masterMapel'), where('guruId', '==', guruId)));
+    const daftar = qSnap.docs.map(d => d.data().nama);
+    await updateDoc(doc(db, 'users', guruId), { mapelList: daftar });
+  };
+
   const simpanSatuMapel = async (idx) => {
     const item = mapelEditList[idx];
     if (!item.nama || !item.nama.trim()) { setAdminMsg('❌ Nama mapel tidak boleh kosong!'); setTimeout(() => setAdminMsg(''), 2000); return; }
     try {
-      // Lihat siapa guru yang tercatat di Firestore SEBELUM disimpan ulang,
-      // supaya kalau guru-nya diganti/dilepas, akses guru lama (cuma untuk mapel ini) ikut dicabut.
       const before = await getDoc(doc(db, 'masterMapel', item.id));
       const guruSebelumnya = before.exists() ? (before.data().guruId || '') : '';
-      const namaSebelumnya = before.exists() ? (before.data().nama || item.nama) : item.nama;
 
       await simpanMapel(item);
 
-      // Tambahkan mapel ini ke daftar mapel guru yang ditugaskan — TIDAK menghapus
-      // mapel lain yang sudah dia pegang, jadi 1 guru boleh pegang banyak mapel.
-      if (item.guruId) {
-        await updateDoc(doc(db, 'users', item.guruId), { mapelList: arrayUnion(item.nama) });
-      }
-      // Kalau guru pada kartu ini diganti/dilepas, cabut HANYA akses ke mapel
-      // ini dari guru lama — mapel lain yang dia pegang tetap aman.
-      if (guruSebelumnya && guruSebelumnya !== item.guruId) {
-        await updateDoc(doc(db, 'users', guruSebelumnya), { mapelList: arrayRemove(namaSebelumnya) });
-      }
+      // Hitung ulang mapelList guru yang terlibat (baru & lama kalau beda),
+      // langsung dari masterMapel — jadi gak mungkin ada mapel yang "hilang".
+      const terlibat = [item.guruId, guruSebelumnya].filter((v, i, arr) => v && arr.indexOf(v) === i);
+      for (const gid of terlibat) await hitungUlangMapelGuru(gid);
     } catch (e) { setAdminMsg('❌ Gagal sinkron akses guru: ' + e.message); setTimeout(() => setAdminMsg(''), 3000); }
   };
 
@@ -832,6 +842,7 @@ function App() {
     try {
       await deleteDoc(doc(db, 'masterMapel', item.id));
       await catatAktivitas('HAPUS_MAPEL', item.nama);
+      if (item.guruId) await hitungUlangMapelGuru(item.guruId);
       setMapelEditList(prev => prev.filter((_, i) => i !== idx));
       setAdminMsg('🗑️ Mapel dihapus!');
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
@@ -863,6 +874,25 @@ function App() {
       await sendPasswordResetEmail(auth, userData.email);
       setPengaturanMsg('📧 Link reset dikirim!');
     } catch (e) { setPengaturanMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setPengaturanMsg(''), 4000);
+  };
+
+  // Ganti password langsung dari Pengaturan: masukin password lama buat verifikasi,
+  // lalu password baru langsung aktif — tanpa perlu cek email sama sekali.
+  const gantiPasswordSendiri = async () => {
+    if (!gantiPwForm.lama || !gantiPwForm.baru || !gantiPwForm.konfirmasi) { setPengaturanMsg('❌ Semua kolom wajib diisi!'); setTimeout(() => setPengaturanMsg(''), 3000); return; }
+    if (gantiPwForm.baru !== gantiPwForm.konfirmasi) { setPengaturanMsg('❌ Konfirmasi password baru tidak cocok!'); setTimeout(() => setPengaturanMsg(''), 3000); return; }
+    if (gantiPwForm.baru.length < 6) { setPengaturanMsg('❌ Password baru minimal 6 karakter!'); setTimeout(() => setPengaturanMsg(''), 3000); return; }
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, gantiPwForm.lama);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, gantiPwForm.baru);
+      setGantiPwForm({ lama: '', baru: '', konfirmasi: '' });
+      setPengaturanMsg('✅ Password berhasil diganti! Dipakai mulai login berikutnya.');
+    } catch (e) {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') setPengaturanMsg('❌ Password lama salah!');
+      else setPengaturanMsg('❌ Gagal: ' + e.message);
+    }
     setTimeout(() => setPengaturanMsg(''), 4000);
   };
 
@@ -1351,8 +1381,8 @@ function App() {
           <p style={{ color: '#10b981', fontWeight: '800', fontSize: '15px', marginBottom: '14px' }}>🏫 Master Data</p>
           {masterLoading && <LoadingSpinner />}
           <div style={{ ...S.card, border: '1px solid #fde68a', background: '#fffbeb' }}>
-            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Sinkronkan Akun Lama</p>
-            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — (1) pulihkan akses login akun yang daftarnya sebelum perbaikan keamanan login, dan (2) siapkan guru lama agar bisa pegang lebih dari satu mapel. Aman diklik berkali-kali.</p>
+            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Perbaiki Akun Lama & Mapel Guru</p>
+            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — (1) pulihkan akses login akun lama, dan (2) HITUNG ULANG total mapel tiap guru langsung dari kartu mapel di atas (membenarkan otomatis kalau ada yang sempat hilang/salah). Aman diklik berkali-kali, kapan saja.</p>
             <button onClick={sinkronkanLoginIndex} disabled={migrasiLoading} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
               {migrasiLoading ? '⏳ Memproses...' : '🔄 Sinkronkan Sekarang'}
             </button>
@@ -2279,10 +2309,27 @@ function App() {
 
         {/* Ganti Password */}
         <div style={{ ...S.card, border: '1px solid #ede9fe' }}>
-          <p style={{ color: '#8b5cf6', fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>🔑 Reset Password</p>
-          <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px' }}>Link reset akan dikirim ke: <strong style={{ color: '#0f172a' }}>{userData?.email}</strong></p>
-          <button onClick={gantiPassword} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
-            📧 Kirim Link Reset Password
+          <p style={{ color: '#8b5cf6', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>🔑 Ganti Password</p>
+          <label style={S.label}>Password Lama</label>
+          <div style={S.pwWrap}>
+            <input style={{ ...S.input, paddingRight: '40px' }} type={showLamaPw ? 'text' : 'password'} placeholder="Password saat ini" value={gantiPwForm.lama} onChange={e => setGantiPwForm(p => ({ ...p, lama: e.target.value }))} />
+            <button type="button" style={S.eyeBtn} onClick={() => setShowLamaPw(v => !v)}>{showLamaPw ? '🙈' : '👁️'}</button>
+          </div>
+          <label style={S.label}>Password Baru</label>
+          <div style={S.pwWrap}>
+            <input style={{ ...S.input, paddingRight: '40px' }} type={showGantiPw ? 'text' : 'password'} placeholder="Min. 6 karakter" value={gantiPwForm.baru} onChange={e => setGantiPwForm(p => ({ ...p, baru: e.target.value }))} />
+            <button type="button" style={S.eyeBtn} onClick={() => setShowGantiPw(v => !v)}>{showGantiPw ? '🙈' : '👁️'}</button>
+          </div>
+          <label style={S.label}>Konfirmasi Password Baru</label>
+          <div style={S.pwWrap}>
+            <input style={{ ...S.input, paddingRight: '40px' }} type={showKonfirmasiPw ? 'text' : 'password'} placeholder="Ulangi password baru" value={gantiPwForm.konfirmasi} onChange={e => setGantiPwForm(p => ({ ...p, konfirmasi: e.target.value }))} />
+            <button type="button" style={S.eyeBtn} onClick={() => setShowKonfirmasiPw(v => !v)}>{showKonfirmasiPw ? '🙈' : '👁️'}</button>
+          </div>
+          <button onClick={gantiPasswordSendiri} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginTop: '4px' }}>
+            🔑 Simpan Password Baru
+          </button>
+          <button onClick={gantiPassword} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: 'none', background: 'transparent', color: '#8b5cf6', fontWeight: '600', fontSize: '12px', cursor: 'pointer', marginTop: '6px' }}>
+            Lupa password lama? Kirim link reset ke email
           </button>
         </div>
 
