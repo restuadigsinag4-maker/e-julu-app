@@ -160,6 +160,10 @@ function App() {
     { id:16, nama:'Bahasa Daerah',    icon:'🗣️', warna:'#6d4c41' },
   ];
 
+  // Daftar mapel yang benar-benar dipakai di Forum Belajar & form daftar guru.
+  // Default-nya pakai daftar bawaan di atas, lalu di-overwrite begitu data dari Firestore (masterMapel) selesai dimuat.
+  const [mapelAktif, setMapelAktif] = useState(mapelList);
+
 
   // ── Android Back Button Fix ──────────────────────────────────
   useEffect(() => {
@@ -226,6 +230,16 @@ function App() {
     });
     return () => unsub();
   }, []);
+
+  // ── Muat daftar mapel aktif (Forum Belajar & form daftar guru) ─
+  useEffect(() => {
+    loadMapelAktif();
+  }, []);
+
+  // ── Sinkronkan perubahan dari Panel Admin > Kelola Mapel ───────
+  useEffect(() => {
+    if (mapelEditList.length > 0) setMapelAktif(mapelEditList);
+  }, [mapelEditList]);
 
   // ── Deteksi keluar app (bukan sekedar minimize) ─────────────
   useEffect(() => {
@@ -683,13 +697,35 @@ function App() {
     setMapelLoading(true);
     try {
       const snap = await getDocs(collection(db, 'masterMapel'));
-      const list = snap.empty ? mapelList.map(m => ({ ...m, guruId: '', guruNama: '' })) : snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (!snap.empty) list.sort((a, b) => (a.urutan || a.id) - (b.urutan || b.id));
+      let list;
+      if (snap.empty) {
+        // Pertama kali dipakai: salin daftar mapel bawaan ke Firestore agar semua mapel
+        // jadi dokumen sungguhan yang bisa diedit/dihapus oleh admin.
+        const seeds = mapelList.map(m => ({ ...m, id: 'mapel_' + m.id, guruId: '', guruNama: '', urutan: m.id }));
+        await Promise.all(seeds.map(m => setDoc(doc(db, 'masterMapel', m.id), m)));
+        list = seeds;
+      } else {
+        list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+      }
       setMapelEditList(list);
       const guruSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'guru'), where('status', '==', 'approved')));
       setGuruListForMapel(guruSnap.docs.map(d => d.data()));
     } catch (e) { console.error(e); }
     setMapelLoading(false);
+  };
+
+  // Hanya BACA daftar mapel aktif (dipakai Forum Belajar & form daftar guru).
+  // Tidak menulis apa pun, supaya siswa/guru biasa tidak butuh izin tulis ke masterMapel.
+  const loadMapelAktif = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'masterMapel'));
+      if (!snap.empty) {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+        setMapelAktif(list);
+      }
+    } catch (e) { console.error(e); }
   };
 
   const simpanMapel = async (mapelItem) => {
@@ -702,12 +738,12 @@ function App() {
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
   };
 
-  const assignGuruKeMapel = async (idx, guruId) => {
+  // Cuma update state lokal (form), belum nulis ke Firestore — biar ada tombol Simpan eksplisit.
+  const pilihGuruMapel = (idx, guruId) => {
     const guru = guruListForMapel.find(g => g.uid === guruId);
     const updated = [...mapelEditList];
     updated[idx] = { ...updated[idx], guruId: guruId || '', guruNama: guru?.nama || '' };
     setMapelEditList(updated);
-    await simpanMapel(updated[idx]);
   };
 
   const ubahNamaMapel = (idx, namaBaru) => {
@@ -716,7 +752,24 @@ function App() {
     setMapelEditList(updated);
   };
 
-  const simpanNamaMapel = async (idx) => { await simpanMapel(mapelEditList[idx]); };
+  // Tombol "💾 Simpan" per kartu mapel — commit nama + guru sekaligus.
+  const simpanSatuMapel = async (idx) => {
+    const item = mapelEditList[idx];
+    if (!item.nama || !item.nama.trim()) { setAdminMsg('❌ Nama mapel tidak boleh kosong!'); setTimeout(() => setAdminMsg(''), 2000); return; }
+    await simpanMapel(item);
+  };
+
+  const hapusMapelItem = async (idx) => {
+    const item = mapelEditList[idx];
+    if (!window.confirm(`Hapus mapel "${item.nama}"? Materi/bab yang sudah ada di mapel ini TIDAK ikut terhapus otomatis.`)) return;
+    try {
+      await deleteDoc(doc(db, 'masterMapel', item.id));
+      await catatAktivitas('HAPUS_MAPEL', item.nama);
+      setMapelEditList(prev => prev.filter((_, i) => i !== idx));
+      setAdminMsg('🗑️ Mapel dihapus!');
+    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setAdminMsg(''), 2000);
+  };
 
   const simpanEditProfil = async () => {
     if (!userData) return;
@@ -1302,20 +1355,24 @@ function App() {
       {adminTab === 'mapel' && (
         <div style={{ width: '100%' }}>
           <p style={{ color: '#6366f1', fontWeight: '800', fontSize: '15px', marginBottom: '4px' }}>📐 Kelola Mata Pelajaran</p>
-          <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px' }}>Edit nama, assign guru, atau tambah mapel baru</p>
+          <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px' }}>Edit nama / guru lalu klik Simpan. Hapus mapel yang sudah tidak dipakai.</p>
           {mapelLoading && <LoadingSpinner />}
           {mapelEditList.map((m, idx) => (
-            <div key={idx} style={{ ...S.card, border: '1px solid #ede9fe' }}>
+            <div key={m.id || idx} style={{ ...S.card, border: '1px solid #ede9fe' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                 <span style={{ fontSize: '20px' }}>{m.icon || '📚'}</span>
-                <input style={{ ...S.input, marginBottom: 0, flex: 1, fontSize: '14px', fontWeight: '700' }} value={m.nama} onChange={e => ubahNamaMapel(idx, e.target.value)} onBlur={() => simpanNamaMapel(idx)} />
+                <input style={{ ...S.input, marginBottom: 0, flex: 1, fontSize: '14px', fontWeight: '700' }} value={m.nama} onChange={e => ubahNamaMapel(idx, e.target.value)} />
               </div>
-              <label style={S.label}>Guru Pengampu</label>
-              <select style={{ ...S.select, marginBottom: 0 }} value={m.guruId || ''} onChange={e => assignGuruKeMapel(idx, e.target.value)}>
+              <label style={S.label}>Guru Pengampu (boleh dikosongkan)</label>
+              <select style={{ ...S.select, marginBottom: 0 }} value={m.guruId || ''} onChange={e => pilihGuruMapel(idx, e.target.value)}>
                 <option value="">— Belum ada guru —</option>
                 {guruListForMapel.map(g => <option key={g.uid} value={g.uid}>{g.nama} ({g.mapel})</option>)}
               </select>
               {m.guruNama && <p style={{ color: '#6366f1', fontSize: '12px', fontWeight: '600', margin: '6px 0 0' }}>✅ {m.guruNama}</p>}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <button onClick={() => simpanSatuMapel(idx)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>💾 Simpan</button>
+                <button onClick={() => hapusMapelItem(idx)} style={{ padding: '10px 14px', borderRadius: '10px', border: 'none', background: '#dc2626', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>🗑️ Hapus</button>
+              </div>
             </div>
           ))}
           {mapelEditList.length === 0 && !mapelLoading && (
@@ -1584,7 +1641,7 @@ function App() {
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '800', marginBottom: '4px' }}>Forum Belajar Online</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih Mata Pelajaran</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%' }}>
-        {mapelList.map(m => {
+        {mapelAktif.map(m => {
           const bisaAkses = userRole === 'siswa' || userData?.mapel === m.nama;
           return (
             <button key={m.id} onClick={() => {
@@ -2045,7 +2102,7 @@ function App() {
         <label style={S.label}>Nama Lengkap *</label><input style={S.input} placeholder="Nama lengkap" value={guruForm.nama} onChange={e => updateGuruForm('nama', e.target.value)} />
         <label style={S.label}>Nama Panggilan *</label><input style={S.input} placeholder="Pak Budi / Bu Sari" value={guruForm.namaPanggilan} onChange={e => updateGuruForm('namaPanggilan', e.target.value)} />
         <label style={S.label}>Mata Pelajaran *</label>
-        <select style={S.select} value={guruForm.mapel} onChange={e => updateGuruForm('mapel', e.target.value)}><option value="">Pilih Mapel</option>{mapelList.map(m => <option key={m.id} value={m.nama}>{m.nama}</option>)}</select>
+        <select style={S.select} value={guruForm.mapel} onChange={e => updateGuruForm('mapel', e.target.value)}><option value="">Pilih Mapel</option>{mapelAktif.map(m => <option key={m.id} value={m.nama}>{m.nama}</option>)}</select>
         <label style={S.label}>Jabatan *</label>
         <select style={S.select} value={guruForm.jabatan} onChange={e => updateGuruForm('jabatan', e.target.value)}><option value="">Pilih Jabatan</option>{jabatanList.map(j => <option key={j} value={j}>{j}</option>)}</select>
         <label style={S.label}>Email *</label><input style={S.input} type="email" placeholder="guru@sekolah.sch.id" value={guruForm.email} onChange={e => updateGuruForm('email', e.target.value)} />
@@ -2449,7 +2506,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   if (page === 'pesan') {
     // State pesan dikelola inline dengan useRef agar tidak re-render berlebihan
-    return <PesanPage userData={userData} userRole={userRole} mapelList={mapelList} S={S} TopBar={TopBar} BackBtn={BackBtn} LoadingSpinner={LoadingSpinner} setPage={setPage} db={db} />;
+    return <PesanPage userData={userData} userRole={userRole} mapelList={mapelAktif} S={S} TopBar={TopBar} BackBtn={BackBtn} LoadingSpinner={LoadingSpinner} setPage={setPage} db={db} />;
   }
 
 
