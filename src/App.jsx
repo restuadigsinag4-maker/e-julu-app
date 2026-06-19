@@ -792,10 +792,27 @@ function App() {
   };
 
   // Tombol "💾 Simpan" per kartu mapel — commit nama + guru sekaligus.
+  // PENTING: akses guru ke Forum Belajar ditentukan dari field `mapel` di
+  // PROFIL guru sendiri (users/{uid}.mapel), bukan dari kartu mapel ini.
+  // Makanya assign guru di sini harus ikut nulis ke profil guru itu juga.
   const simpanSatuMapel = async (idx) => {
     const item = mapelEditList[idx];
     if (!item.nama || !item.nama.trim()) { setAdminMsg('❌ Nama mapel tidak boleh kosong!'); setTimeout(() => setAdminMsg(''), 2000); return; }
-    await simpanMapel(item);
+    try {
+      // Lihat siapa guru yang tercatat di Firestore SEBELUM disimpan ulang,
+      // supaya kalau guru-nya diganti/dilepas, akses guru lama ikut dicabut.
+      const before = await getDoc(doc(db, 'masterMapel', item.id));
+      const guruSebelumnya = before.exists() ? (before.data().guruId || '') : '';
+
+      await simpanMapel(item);
+
+      if (item.guruId) {
+        await updateDoc(doc(db, 'users', item.guruId), { mapel: item.nama });
+      }
+      if (guruSebelumnya && guruSebelumnya !== item.guruId) {
+        await updateDoc(doc(db, 'users', guruSebelumnya), { mapel: '' });
+      }
+    } catch (e) { setAdminMsg('❌ Gagal sinkron akses guru: ' + e.message); setTimeout(() => setAdminMsg(''), 3000); }
   };
 
   const hapusMapelItem = async (idx) => {
