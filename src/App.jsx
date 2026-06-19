@@ -735,17 +735,18 @@ function App() {
     setMapelLoading(true);
     try {
       const snap = await getDocs(collection(db, 'masterMapel'));
-      let list;
-      if (snap.empty) {
-        // Pertama kali dipakai: salin daftar mapel bawaan ke Firestore agar semua mapel
-        // jadi dokumen sungguhan yang bisa diedit/dihapus oleh admin.
-        const seeds = mapelList.map(m => ({ ...m, id: 'mapel_' + m.id, guruId: '', guruNama: '', urutan: m.id }));
-        await Promise.all(seeds.map(m => setDoc(doc(db, 'masterMapel', m.id), m)));
-        list = seeds;
-      } else {
-        list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        list.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+      let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const idYangSudahAda = new Set(list.map(m => m.id));
+      // Lengkapi mapel BAWAAN yang masih kurang di Firestore — TIDAK menyentuh
+      // mapel yang sudah ada (termasuk yang custom kayak Bahasa Jerman).
+      const kurang = mapelList
+        .filter(m => !idYangSudahAda.has('mapel_' + m.id))
+        .map(m => ({ ...m, id: 'mapel_' + m.id, guruId: '', guruNama: '', urutan: m.id }));
+      if (kurang.length > 0) {
+        await Promise.all(kurang.map(m => setDoc(doc(db, 'masterMapel', m.id), m)));
+        list = [...list, ...kurang];
       }
+      list.sort((a, b) => (a.urutan ?? 999) - (b.urutan ?? 999));
       setMapelEditList(list);
       const guruSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'guru'), where('status', '==', 'approved')));
       setGuruListForMapel(guruSnap.docs.map(d => d.data()));
@@ -1402,6 +1403,9 @@ function App() {
           <p style={{ color: '#6366f1', fontWeight: '800', fontSize: '15px', marginBottom: '4px' }}>📐 Kelola Mata Pelajaran</p>
           <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px' }}>Edit nama / guru lalu klik Simpan. Hapus mapel yang sudah tidak dipakai.</p>
           {mapelLoading && <LoadingSpinner />}
+          <p style={{ color: '#475569', fontWeight: '700', fontSize: '13px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            📋 Mapel yang Sudah Ada ({mapelEditList.length})
+          </p>
           {mapelEditList.map((m, idx) => (
             <div key={m.id || idx} style={{ ...S.card, border: '1px solid #ede9fe' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
@@ -1414,7 +1418,8 @@ function App() {
                 {guruListForMapel.map(g => <option key={g.uid} value={g.uid}>{g.nama} ({g.mapel})</option>)}
               </select>
               {m.guruNama && <p style={{ color: '#6366f1', fontSize: '12px', fontWeight: '600', margin: '6px 0 0' }}>✅ {m.guruNama}</p>}
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <p style={{ color: '#94a3b8', fontSize: '11px', margin: '8px 0 0' }}>⚠️ Klik Simpan setelah ubah nama/guru — perubahan tidak otomatis tersimpan.</p>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                 <button onClick={() => simpanSatuMapel(idx)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>💾 Simpan</button>
                 <button onClick={() => hapusMapelItem(idx)} style={{ padding: '10px 14px', borderRadius: '10px', border: 'none', background: '#dc2626', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>🗑️ Hapus</button>
               </div>
@@ -1426,8 +1431,9 @@ function App() {
             </div>
           )}
           {/* Tambah Mapel Baru */}
-          <div style={{ ...S.card, border: '2px dashed #6366f1', marginTop: '8px' }}>
-            <p style={{ color: '#6366f1', fontWeight: '700', marginBottom: '10px', fontSize: '14px' }}>➕ Tambah Mapel Baru</p>
+          <div style={{ ...S.card, border: '2px dashed #6366f1', marginTop: '16px' }}>
+            <p style={{ color: '#6366f1', fontWeight: '800', marginBottom: '2px', fontSize: '14px' }}>➕ Tambah Mapel BARU (beda dari yang di atas)</p>
+            <p style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '10px' }}>Ini bikin mapel baru terpisah — tidak akan mengubah/menimpa mapel manapun di atas.</p>
             <AdminTambahMapel mapelEditList={mapelEditList} setMapelEditList={setMapelEditList} guruListForMapel={guruListForMapel} setAdminMsg={setAdminMsg} catatAktivitas={catatAktivitas} S={S} db={db} />
           </div>
         </div>
