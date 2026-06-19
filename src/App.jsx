@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, collection,
-  getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy
+  getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy, arrayUnion, arrayRemove
 } from 'firebase/firestore';
 
 function App() {
@@ -439,7 +439,7 @@ function App() {
       const cred = await createUserWithEmailAndPassword(auth, f.email, f.password);
       await setDoc(doc(db, 'users', cred.user.uid), {
         uid: cred.user.uid, role: 'guru', status: 'pending', nip: f.nip || '', nik: f.nik || '',
-        nama: f.nama, namaPanggilan: f.namaPanggilan, mapel: f.mapel, jabatan: f.jabatan,
+        nama: f.nama, namaPanggilan: f.namaPanggilan, mapel: f.mapel, mapelList: [f.mapel], jabatan: f.jabatan,
         email: f.email, telpon: f.telpon, bio: f.bio, fotoUrl: fotoGuruDataUrl || '',
         poinUpload: 0, poinNilai: 0, pelanggaran: 0, createdAt: new Date()
       });
@@ -705,9 +705,9 @@ function App() {
   // yang sudah terdaftar SEBELUM fitur login yang lebih aman ini dipasang.
   // Aman dijalankan berkali-kali (skip yang sudah ada).
   const sinkronkanLoginIndex = async () => {
-    if (!window.confirm('Sinkronkan akun lama supaya bisa login lagi?')) return;
+    if (!window.confirm('Sinkronkan akun lama supaya bisa login lagi & dukung banyak mapel?')) return;
     setMigrasiLoading(true);
-    let dibuat = 0, dilewati = 0;
+    let dibuat = 0, dilewati = 0, mapelDiisi = 0;
     try {
       const snap = await getDocs(collection(db, 'users'));
       for (const d of snap.docs) {
@@ -723,9 +723,15 @@ function App() {
           await setDoc(doc(db, 'loginIndex', key), { email: u.email });
           dibuat++;
         }
+        // Guru lama belum punya mapelList (array) — isi dari mapel tunggal yang sudah ada,
+        // supaya guru itu bisa langsung ditambah ke mapel lain tanpa kehilangan yang lama.
+        if (u.role === 'guru' && !Array.isArray(u.mapelList) && u.mapel) {
+          await updateDoc(doc(db, 'users', d.id), { mapelList: [u.mapel] });
+          mapelDiisi++;
+        }
       }
-      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} dibuat, ${dilewati} dilewati`);
-      setAdminMsg(`✅ Sinkron selesai! ${dibuat} akun lama dipulihkan, ${dilewati} sudah OK sebelumnya.`);
+      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} login dibuat, ${mapelDiisi} mapelList diisi, ${dilewati} dilewati`);
+      setAdminMsg(`✅ Sinkron selesai! ${dibuat} akun login dipulihkan, ${mapelDiisi} guru dapat mapelList, ${dilewati} sudah OK sebelumnya.`);
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setMigrasiLoading(false);
     setTimeout(() => setAdminMsg(''), 5000);
@@ -800,17 +806,22 @@ function App() {
     if (!item.nama || !item.nama.trim()) { setAdminMsg('❌ Nama mapel tidak boleh kosong!'); setTimeout(() => setAdminMsg(''), 2000); return; }
     try {
       // Lihat siapa guru yang tercatat di Firestore SEBELUM disimpan ulang,
-      // supaya kalau guru-nya diganti/dilepas, akses guru lama ikut dicabut.
+      // supaya kalau guru-nya diganti/dilepas, akses guru lama (cuma untuk mapel ini) ikut dicabut.
       const before = await getDoc(doc(db, 'masterMapel', item.id));
       const guruSebelumnya = before.exists() ? (before.data().guruId || '') : '';
+      const namaSebelumnya = before.exists() ? (before.data().nama || item.nama) : item.nama;
 
       await simpanMapel(item);
 
+      // Tambahkan mapel ini ke daftar mapel guru yang ditugaskan — TIDAK menghapus
+      // mapel lain yang sudah dia pegang, jadi 1 guru boleh pegang banyak mapel.
       if (item.guruId) {
-        await updateDoc(doc(db, 'users', item.guruId), { mapel: item.nama });
+        await updateDoc(doc(db, 'users', item.guruId), { mapelList: arrayUnion(item.nama) });
       }
+      // Kalau guru pada kartu ini diganti/dilepas, cabut HANYA akses ke mapel
+      // ini dari guru lama — mapel lain yang dia pegang tetap aman.
       if (guruSebelumnya && guruSebelumnya !== item.guruId) {
-        await updateDoc(doc(db, 'users', guruSebelumnya), { mapel: '' });
+        await updateDoc(doc(db, 'users', guruSebelumnya), { mapelList: arrayRemove(namaSebelumnya) });
       }
     } catch (e) { setAdminMsg('❌ Gagal sinkron akses guru: ' + e.message); setTimeout(() => setAdminMsg(''), 3000); }
   };
@@ -909,6 +920,14 @@ function App() {
   };
 
   const hitungTotalPoin = (u) => (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0);
+
+  // Guru bisa pegang LEBIH dari satu mapel. Cek ke mapelList (array) dulu;
+  // kalau akun lama belum punya mapelList, jatuhkan ke field `mapel` (tunggal).
+  const guruPunyaMapel = (namaMapel) => {
+    if (!userData) return false;
+    if (Array.isArray(userData.mapelList)) return userData.mapelList.includes(namaMapel);
+    return userData.mapel === namaMapel;
+  };
 
   const getRankBadge = (rank) => {
     if (rank === 1) return { icon: '🥇', label: 'Rank #1', color: '#FFD700' };
@@ -1332,8 +1351,8 @@ function App() {
           <p style={{ color: '#10b981', fontWeight: '800', fontSize: '15px', marginBottom: '14px' }}>🏫 Master Data</p>
           {masterLoading && <LoadingSpinner />}
           <div style={{ ...S.card, border: '1px solid #fde68a', background: '#fffbeb' }}>
-            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Sinkronkan Login Akun Lama</p>
-            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — pulihkan akses login untuk siswa/guru yang daftarnya sebelum perbaikan keamanan login dipasang. Aman diklik berkali-kali.</p>
+            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Sinkronkan Akun Lama</p>
+            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — (1) pulihkan akses login akun yang daftarnya sebelum perbaikan keamanan login, dan (2) siapkan guru lama agar bisa pegang lebih dari satu mapel. Aman diklik berkali-kali.</p>
             <button onClick={sinkronkanLoginIndex} disabled={migrasiLoading} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
               {migrasiLoading ? '⏳ Memproses...' : '🔄 Sinkronkan Sekarang'}
             </button>
@@ -1710,7 +1729,7 @@ function App() {
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih Mata Pelajaran</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%' }}>
         {mapelAktif.map(m => {
-          const bisaAkses = userRole === 'siswa' || userData?.mapel === m.nama;
+          const bisaAkses = userRole === 'siswa' || guruPunyaMapel(m.nama);
           return (
             <button key={m.id} onClick={() => {
               if (!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
