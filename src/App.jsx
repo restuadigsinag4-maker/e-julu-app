@@ -138,6 +138,7 @@ function App() {
   const [mapelEditList, setMapelEditList] = useState([]);
   const [mapelLoading, setMapelLoading] = useState(false);
   const [guruListForMapel, setGuruListForMapel] = useState([]);
+  const [migrasiLoading, setMigrasiLoading] = useState(false);
 
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
@@ -417,6 +418,9 @@ function App() {
         jurusan: f.jurusan, citaCita: f.citaCita, hobby: f.hobby, bio: f.bio, fotoUrl: fotoDataUrl || '',
         poinPG: 0, poinEssay: 0, poinModul: 0, pelanggaran: 0, createdAt: new Date()
       });
+      // Index minimal NISN → email supaya proses login (sebelum user ter-autentikasi)
+      // tidak perlu query ke collection 'users' yang isinya data pribadi lengkap.
+      await setDoc(doc(db, 'loginIndex', 'siswa_' + f.nisn), { email: f.email });
       await signOut(auth);
       setSiswaError('');
       setPage('menunggu');
@@ -439,6 +443,9 @@ function App() {
         email: f.email, telpon: f.telpon, bio: f.bio, fotoUrl: fotoGuruDataUrl || '',
         poinUpload: 0, poinNilai: 0, pelanggaran: 0, createdAt: new Date()
       });
+      // Index minimal NIP/NIK → email, sama alasannya kayak siswa di atas.
+      if (f.nip) await setDoc(doc(db, 'loginIndex', 'guru_' + f.nip), { email: f.email });
+      if (f.nik) await setDoc(doc(db, 'loginIndex', 'guru_' + f.nik), { email: f.email });
       await signOut(auth);
       setGuruError('');
       setPage('menunggu');
@@ -450,15 +457,16 @@ function App() {
     if (!siswaLoginNISN || !siswaLoginPassword) { setLoginError('NISN dan password wajib diisi!'); return; }
     setLoading(true); setLoginError('');
     try {
-      const q = query(collection(db, 'users'), where('nisn', '==', siswaLoginNISN), where('role', '==', 'siswa'));
-      const snap = await getDocs(q);
-      if (snap.empty) { setLoginError('NISN tidak ditemukan!'); setLoading(false); return; }
-      const siswaData = snap.docs[0].data();
-      if (siswaData.status === 'pending') { setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
-      if (siswaData.status === 'rejected') { setLoginError('Akun ditolak.'); setLoading(false); return; }
-      await signInWithEmailAndPassword(auth, siswaData.email, siswaLoginPassword);
+      const idxSnap = await getDoc(doc(db, 'loginIndex', 'siswa_' + siswaLoginNISN));
+      if (!idxSnap.exists()) { setLoginError('NISN tidak ditemukan!'); setLoading(false); return; }
+      const cred = await signInWithEmailAndPassword(auth, idxSnap.data().email, siswaLoginPassword);
+      const docSnap = await getDoc(doc(db, 'users', cred.user.uid));
+      if (!docSnap.exists()) { await signOut(auth); setLoginError('Data akun tidak ditemukan.'); setLoading(false); return; }
+      const siswaData = docSnap.data();
+      if (siswaData.status === 'pending') { await signOut(auth); setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
+      if (siswaData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
       setUserData(siswaData); setUserRole('siswa'); setPage('dashboard');
-    } catch (e) { setLoginError('Password salah!'); }
+    } catch (e) { setLoginError('NISN atau password salah!'); }
     setLoading(false);
   };
 
@@ -466,16 +474,16 @@ function App() {
     if (!guruLoginNIP || !guruLoginPassword) { setLoginError('NIP/NIK dan password wajib diisi!'); return; }
     setLoading(true); setLoginError('');
     try {
-      const q = query(collection(db, 'users'), where('role', '==', 'guru'));
-      const snap = await getDocs(q);
-      const guruDoc = snap.docs.find(d => { const data = d.data(); return data.nip === guruLoginNIP || data.nik === guruLoginNIP; });
-      if (!guruDoc) { setLoginError('NIP/NIK tidak ditemukan!'); setLoading(false); return; }
-      const guruData = guruDoc.data();
-      if (guruData.status === 'pending') { setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
-      if (guruData.status === 'rejected') { setLoginError('Akun ditolak.'); setLoading(false); return; }
-      await signInWithEmailAndPassword(auth, guruData.email, guruLoginPassword);
+      const idxSnap = await getDoc(doc(db, 'loginIndex', 'guru_' + guruLoginNIP));
+      if (!idxSnap.exists()) { setLoginError('NIP/NIK tidak ditemukan!'); setLoading(false); return; }
+      const cred = await signInWithEmailAndPassword(auth, idxSnap.data().email, guruLoginPassword);
+      const docSnap = await getDoc(doc(db, 'users', cred.user.uid));
+      if (!docSnap.exists()) { await signOut(auth); setLoginError('Data akun tidak ditemukan.'); setLoading(false); return; }
+      const guruData = docSnap.data();
+      if (guruData.status === 'pending') { await signOut(auth); setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
+      if (guruData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
       setUserData(guruData); setUserRole('guru'); setPage('dashboard');
-    } catch (e) { setLoginError('Password salah!'); }
+    } catch (e) { setLoginError('NIP/NIK atau password salah!'); }
     setLoading(false);
   };
 
@@ -691,6 +699,36 @@ function App() {
     setAdminMsg('🗑️ Dihapus!');
     loadKelas();
     setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // Sekali-jalan: bikinkan entri loginIndex (NISN/NIP/NIK → email) untuk akun
+  // yang sudah terdaftar SEBELUM fitur login yang lebih aman ini dipasang.
+  // Aman dijalankan berkali-kali (skip yang sudah ada).
+  const sinkronkanLoginIndex = async () => {
+    if (!window.confirm('Sinkronkan akun lama supaya bisa login lagi?')) return;
+    setMigrasiLoading(true);
+    let dibuat = 0, dilewati = 0;
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      for (const d of snap.docs) {
+        const u = d.data();
+        if (!u.email) continue;
+        const keys = [];
+        if (u.role === 'siswa' && u.nisn) keys.push('siswa_' + u.nisn);
+        if (u.role === 'guru' && u.nip) keys.push('guru_' + u.nip);
+        if (u.role === 'guru' && u.nik) keys.push('guru_' + u.nik);
+        for (const key of keys) {
+          const existing = await getDoc(doc(db, 'loginIndex', key));
+          if (existing.exists()) { dilewati++; continue; }
+          await setDoc(doc(db, 'loginIndex', key), { email: u.email });
+          dibuat++;
+        }
+      }
+      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} dibuat, ${dilewati} dilewati`);
+      setAdminMsg(`✅ Sinkron selesai! ${dibuat} akun lama dipulihkan, ${dilewati} sudah OK sebelumnya.`);
+    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
+    setMigrasiLoading(false);
+    setTimeout(() => setAdminMsg(''), 5000);
   };
 
   const loadMapelAdmin = async () => {
@@ -1275,6 +1313,13 @@ function App() {
         <div style={{ width: '100%' }}>
           <p style={{ color: '#10b981', fontWeight: '800', fontSize: '15px', marginBottom: '14px' }}>🏫 Master Data</p>
           {masterLoading && <LoadingSpinner />}
+          <div style={{ ...S.card, border: '1px solid #fde68a', background: '#fffbeb' }}>
+            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Sinkronkan Login Akun Lama</p>
+            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — pulihkan akses login untuk siswa/guru yang daftarnya sebelum perbaikan keamanan login dipasang. Aman diklik berkali-kali.</p>
+            <button onClick={sinkronkanLoginIndex} disabled={migrasiLoading} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+              {migrasiLoading ? '⏳ Memproses...' : '🔄 Sinkronkan Sekarang'}
+            </button>
+          </div>
           <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
             <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>📅 Tahun Ajaran</p>
             {tahunAjaranList.map((t, i) => (
@@ -2524,13 +2569,14 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
   const [siswaMapel, setSiswaMapel] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [inboxList, setInboxList] = React.useState([]);
-  const [selectedThread, setSelectedThread] = React.useState(null);
+  const [guruListSiswa, setGuruListSiswa] = React.useState([]);
+  const [targetGuru, setTargetGuru] = React.useState(null);
   const [threadPesan, setThreadPesan] = React.useState([]);
   const [msg, setMsg] = React.useState('');
 
   React.useEffect(() => {
     if (userRole === 'guru') loadSiswaMapel();
-    else loadInboxSiswa();
+    else { loadGuruListSiswa(); loadInboxSiswa(); }
   }, []);
 
   const loadSiswaMapel = async () => {
@@ -2546,8 +2592,20 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
     setLoading(false);
   };
 
-  const loadInboxSiswa = async () => {
+  const loadGuruListSiswa = async () => {
     setLoading(true);
+    try {
+      const { getDocs, collection, query, where } = await import('firebase/firestore');
+      const q = query(collection(db, 'users'), where('role', '==', 'guru'), where('status', '==', 'approved'));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => d.data());
+      list.sort((a, b) => a.nama.localeCompare(b.nama));
+      setGuruListSiswa(list);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const loadInboxSiswa = async () => {
     try {
       const { getDocs, collection, query, where } = await import('firebase/firestore');
       const q = query(collection(db, 'pesan'), where('siswaId', '==', userData.uid));
@@ -2556,7 +2614,6 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
       list.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
       setInboxList(list);
     } catch (e) { console.error(e); }
-    setLoading(false);
   };
 
   const loadThread = async (guruId, siswaId) => {
@@ -2584,10 +2641,35 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
         siswaNama: targetSiswa.nama,
         siswaKelas: `${targetSiswa.kelas}${targetSiswa.jurusan}`,
         isi: pesanInput.trim(),
+        pengirim: 'guru',
         timestamp: new Date(),
         waktu: new Date().toLocaleString('id-ID')
       };
-      await addDoc(collection(fs, 'pesan'), newPesan);
+      await addDoc(collection(db, 'pesan'), newPesan);
+      setThreadPesan(prev => [...prev, { ...newPesan, timestamp: { seconds: Date.now()/1000 } }]);
+      setPesanInput('');
+      setMsg('✅ Pesan terkirim!');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e) { setMsg('❌ Gagal: ' + e.message); }
+  };
+
+  const kirimPesanSiswa = async () => {
+    if (!pesanInput.trim() || !targetGuru) return;
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      const newPesan = {
+        guruId: targetGuru.uid,
+        guruNama: targetGuru.nama,
+        guruMapel: targetGuru.mapel || '',
+        siswaId: userData.uid,
+        siswaNama: userData.nama,
+        siswaKelas: `${userData.kelas}${userData.jurusan}`,
+        isi: pesanInput.trim(),
+        pengirim: 'siswa',
+        timestamp: new Date(),
+        waktu: new Date().toLocaleString('id-ID')
+      };
+      await addDoc(collection(db, 'pesan'), newPesan);
       setThreadPesan(prev => [...prev, { ...newPesan, timestamp: { seconds: Date.now()/1000 } }]);
       setPesanInput('');
       setMsg('✅ Pesan terkirim!');
@@ -2643,14 +2725,17 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
         {loading && <LoadingSpinner />}
         {!loading && threadPesan.length === 0 && <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}><p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada pesan. Kirim pesan pertama!</p></div>}
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-          {threadPesan.map((p, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <div style={{ padding: '10px 14px', borderRadius: '16px 4px 16px 16px', background: 'linear-gradient(135deg,#06b6d4,#0891b2)', maxWidth: '82%', boxShadow: '0 2px 8px rgba(6,182,212,0.25)' }}>
-                <p style={{ color: 'white', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{p.isi}</p>
+          {threadPesan.map((p, i) => {
+            const dariGuru = (p.pengirim || 'guru') === 'guru';
+            return (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: dariGuru ? 'flex-end' : 'flex-start' }}>
+                <div style={{ padding: '10px 14px', borderRadius: dariGuru ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: dariGuru ? 'linear-gradient(135deg,#06b6d4,#0891b2)' : 'white', border: dariGuru ? 'none' : '1px solid #e2e8f0', maxWidth: '82%', boxShadow: dariGuru ? '0 2px 8px rgba(6,182,212,0.25)' : '0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <p style={{ color: dariGuru ? 'white' : '#0f172a', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{p.isi}</p>
+                </div>
+                <p style={{ fontSize: '10px', color: '#94a3b8', margin: '3px 0 0' }}>{!dariGuru ? `${targetSiswa.nama} · ` : ''}{formatWaktu(p.timestamp)}</p>
               </div>
-              <p style={{ fontSize: '10px', color: '#94a3b8', margin: '3px 0 0' }}>{formatWaktu(p.timestamp)}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {/* Input */}
         <div style={{ position: 'fixed', bottom: '44px', left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '430px', background: 'rgba(255,255,255,0.97)', borderTop: '1px solid #e2e8f0', padding: '10px 16px', boxSizing: 'border-box', backdropFilter: 'blur(20px)', zIndex: 100 }}>
@@ -2663,63 +2748,77 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
     );
   }
 
-  // Siswa: lihat pesan masuk dari guru
+  // Siswa: pilih guru (yang sudah pernah chat atau belum) lalu kirim/balas pesan
+  const kontakGuru = guruListSiswa.map(g => {
+    const pesanGuru = inboxList.filter(p => p.guruId === g.uid);
+    return { ...g, lastMsg: pesanGuru[0]?.isi || null, count: pesanGuru.length };
+  });
+
+  if (!targetGuru) {
+    return (
+      <div style={S.page}>
+        <TopBar />
+        <BackBtn to="dashboard" fn={() => setPage('dashboard')} />
+        <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Pesan</p>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih guru untuk mulai atau lanjut chat</p>
+        {loading && <LoadingSpinner />}
+        {!loading && kontakGuru.length === 0 && (
+          <div style={{ ...S.card, textAlign: 'center', padding: '40px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>💬</div>
+            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada guru terdaftar.</p>
+          </div>
+        )}
+        {kontakGuru.map((g, i) => (
+          <div key={i} onClick={() => { setTargetGuru(g); loadThread(g.uid, userData.uid); }}
+            style={{ ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>{g.avatar || '👨‍🏫'}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.nama}</p>
+              <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 2px', fontWeight: '600' }}>{g.mapel}</p>
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.lastMsg || 'Mulai obrolan →'}</p>
+            </div>
+            {g.count > 0 && <div style={{ background: '#06b6d4', color: 'white', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{g.count}</div>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Thread chat dengan guru terpilih
   return (
-    <div style={S.page}>
+    <div style={{ ...S.page, paddingBottom: '120px' }}>
       <TopBar />
-      <BackBtn to="dashboard" fn={() => setPage('dashboard')} />
-      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Pesan Masuk</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pesan dari guru mata pelajaranmu</p>
-      {loading && <LoadingSpinner />}
-      {!loading && inboxList.length === 0 && (
-        <div style={{ ...S.card, textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>💬</div>
-          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada pesan dari guru.</p>
+      <button onClick={() => setTargetGuru(null)} style={{ ...S.btnBack, marginBottom: '8px' }}>‹ Kembali ke daftar</button>
+      <div style={{ width: '100%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 14px rgba(220,38,38,0.3)' }}>
+        <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>{targetGuru.avatar || '👨‍🏫'}</div>
+        <div>
+          <p style={{ color: 'white', fontWeight: '800', fontSize: '15px', margin: '0 0 2px' }}>{targetGuru.nama}</p>
+          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', margin: 0 }}>{targetGuru.mapel}</p>
         </div>
-      )}
-      {!selectedThread ? (
-        // Daftar guru yang pernah kirim pesan
-        (() => {
-          const guruMap = {};
-          inboxList.forEach(p => { if (!guruMap[p.guruId]) guruMap[p.guruId] = { guruId: p.guruId, guruNama: p.guruNama, guruMapel: p.guruMapel, lastMsg: p.isi, lastTime: p.timestamp, count: 0 }; guruMap[p.guruId].count++; guruMap[p.guruId].lastMsg = p.isi; guruMap[p.guruId].lastTime = p.timestamp; });
-          return Object.values(guruMap).map((g, i) => (
-            <div key={i} onClick={() => { setSelectedThread(g); setThreadPesan(inboxList.filter(p => p.guruId === g.guruId)); }}
-              style={{ ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>👨‍🏫</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.guruNama}</p>
-                <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 2px', fontWeight: '600' }}>{g.guruMapel}</p>
-                <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.lastMsg}</p>
+      </div>
+      {msg && <div style={msg.startsWith('✅') ? S.successBox : S.errBox}>{msg}</div>}
+      {loading && <LoadingSpinner />}
+      {!loading && threadPesan.length === 0 && <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}><p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada pesan. Kirim pesan pertama!</p></div>}
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+        {threadPesan.map((p, i) => {
+          const dariSiswa = p.pengirim === 'siswa';
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: dariSiswa ? 'flex-end' : 'flex-start' }}>
+              <div style={{ padding: '10px 14px', borderRadius: dariSiswa ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: dariSiswa ? 'linear-gradient(135deg,#dc2626,#b91c1c)' : 'white', border: dariSiswa ? 'none' : '1px solid #e2e8f0', maxWidth: '82%', boxShadow: dariSiswa ? '0 2px 8px rgba(220,38,38,0.25)' : '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <p style={{ color: dariSiswa ? 'white' : '#0f172a', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{p.isi}</p>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ background: '#06b6d4', color: 'white', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '700' }}>{g.count}</div>
-              </div>
+              <p style={{ fontSize: '10px', color: '#94a3b8', margin: '3px 0 0' }}>{formatWaktu(p.timestamp)}</p>
             </div>
-          ));
-        })()
-      ) : (
-        // Thread dengan guru terpilih
-        <>
-          <button onClick={() => setSelectedThread(null)} style={{ ...S.btnBack, marginBottom: '8px' }}>‹ Kembali</button>
-          <div style={{ width: '100%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 14px rgba(220,38,38,0.3)' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>👨‍🏫</div>
-            <div>
-              <p style={{ color: 'white', fontWeight: '800', fontSize: '15px', margin: '0 0 2px' }}>{selectedThread.guruNama}</p>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', margin: 0 }}>{selectedThread.guruMapel}</p>
-            </div>
-          </div>
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {threadPesan.sort((a,b) => (a.timestamp?.seconds||0)-(b.timestamp?.seconds||0)).map((p, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <div style={{ padding: '10px 14px', borderRadius: '4px 16px 16px 16px', background: 'white', border: '1px solid #e2e8f0', maxWidth: '82%', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                  <p style={{ color: '#0f172a', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{p.isi}</p>
-                </div>
-                <p style={{ fontSize: '10px', color: '#94a3b8', margin: '3px 0 0' }}>{formatWaktu(p.timestamp)}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+          );
+        })}
+      </div>
+      {/* Input */}
+      <div style={{ position: 'fixed', bottom: '44px', left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '430px', background: 'rgba(255,255,255,0.97)', borderTop: '1px solid #e2e8f0', padding: '10px 16px', boxSizing: 'border-box', backdropFilter: 'blur(20px)', zIndex: 100 }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+          <textarea style={{ ...S.input, flex: 1, height: '44px', marginBottom: 0, resize: 'none', padding: '10px 14px', fontSize: '14px' }} placeholder={`Pesan untuk ${targetGuru.nama}...`} value={pesanInput} onChange={e => setPesanInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); kirimPesanSiswa(); } }} />
+          <button onClick={kirimPesanSiswa} disabled={!pesanInput.trim()} style={{ width: '44px', height: '44px', borderRadius: '12px', border: 'none', background: pesanInput.trim() ? 'linear-gradient(135deg,#dc2626,#b91c1c)' : '#e2e8f0', color: pesanInput.trim() ? 'white' : '#94a3b8', fontSize: '18px', cursor: pesanInput.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>➤</button>
+        </div>
+      </div>
     </div>
   );
 }
