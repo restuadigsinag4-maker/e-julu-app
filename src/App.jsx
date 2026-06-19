@@ -12,9 +12,6 @@ import {
   getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy
 } from 'firebase/firestore';
 
-const ADMIN_EMAIL = 'admin@ejulu.com';
-const ADMIN_PASSWORD = '*sman1JULU#';
-
 function App() {
   const [page, setPage] = useState('splash');
   const [userRole, setUserRole] = useState(null);
@@ -142,42 +139,6 @@ function App() {
   const [mapelLoading, setMapelLoading] = useState(false);
   const [guruListForMapel, setGuruListForMapel] = useState([]);
 
-  // ── UJIAN STATE ───────────────────────────────────────────────
-  const [ujianList, setUjianList] = useState([]);
-  const [ujianLoading, setUjianLoading] = useState(false);
-  const [selectedUjian, setSelectedUjian] = useState(null);
-  const [ujianForm, setUjianForm] = useState({
-    nama: '', jenis: 'UTS', mapel: '', kelas: '',
-    tanggal: '', jamMulai: '', durasi: 90, status: 'draft'
-  });
-  const [soalUjianList, setSoalUjianList] = useState([]);
-  const [soalUjianBaru, setSoalUjianBaru] = useState({ soal: '', opsi: ['A. ','B. ','C. ','D. ','E. '], kunci: 'A' });
-  const [ujianMsg, setUjianMsg] = useState('');
-  const [ujianAdminTab, setUjianAdminTab] = useState('list');
-  const [pesertaUjianList, setPesertaUjianList] = useState([]);
-  const [pengawasUjianList, setPengawasUjianList] = useState([]);
-  const [allSiswaForUjian, setAllSiswaForUjian] = useState([]);
-  const [allGuruForUjian, setAllGuruForUjian] = useState([]);
-
-  // Ujian Siswa
-  const [ujianSoalAcak, setUjianSoalAcak] = useState([]);
-  const [ujianJawaban, setUjianJawaban] = useState({});
-  const [ujianSoalIndex, setUjianSoalIndex] = useState(0);
-  const [ujianSelesai, setUjianSelesai] = useState(false);
-  const [ujianTimer, setUjianTimer] = useState(0);
-  const ujianTimerRef = useRef(null);
-  const ujianTersimpan = useRef(false);
-  const [ujianHasilSaya, setUjianHasilSaya] = useState(null);
-
-  // Guru Pengawas - monitor
-  const [monitorData, setMonitorData] = useState([]);
-  const [monitorLoading, setMonitorLoading] = useState(false);
-  const monitorIntervalRef = useRef(null);
-
-  // Guru Mapel - rekap nilai
-  const [rekapNilai, setRekapNilai] = useState([]);
-  const [rekapLoading, setRekapLoading] = useState(false);
-
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
   const mapelList = [
@@ -198,7 +159,6 @@ function App() {
     { id:15, nama:'Agama',            icon:'🕌', warna:'#1a5276' },
     { id:16, nama:'Bahasa Daerah',    icon:'🗣️', warna:'#6d4c41' },
   ];
-  const jenisUjianList = ['UTS','UAS','Mid Semester','Semester Ganjil','Semester Genap','Ujian Harian','Try Out'];
 
 
   // ── Android Back Button Fix ──────────────────────────────────
@@ -217,7 +177,6 @@ function App() {
         pengaturan: 'dashboard', about: 'dashboard', pesan: 'dashboard',
         adminDashboard: 'role', adminDetailUser: 'adminDashboard',
         adminSettings: 'adminDashboard', adminEditAbout: 'adminSettings',
-        adminKelolUjian: 'adminDashboard',
         loginSiswa: 'menuSiswa', loginGuru: 'menuGuru',
         menuSiswa: 'role', menuGuru: 'role',
         registerSiswa: 'menuSiswa', registerGuru: 'menuGuru',
@@ -247,7 +206,7 @@ function App() {
             if (data.status === 'approved') {
               setUserData(data);
               setUserRole(data.role);
-              setPage('dashboard');
+              setPage(data.role === 'admin' ? 'adminDashboard' : 'dashboard');
             } else if (data.status === 'pending') {
               setPage('menunggu');
             } else {
@@ -291,35 +250,6 @@ function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [page]);
 
-  // ── Deteksi keluar saat UJIAN ─────────────────────────────────
-  useEffect(() => {
-    const handleUjianVisibility = async () => {
-      if (document.hidden && page === 'ujianBerlangsung' && selectedUjian && userData) {
-        clearInterval(ujianTimerRef.current);
-        clearInterval(monitorIntervalRef.current);
-        // Catat pelanggaran keluar
-        await addDoc(collection(db, 'aktivitasUjian'), {
-          ujianId: selectedUjian.id,
-          siswaId: userData.uid,
-          siswaNama: userData.nama,
-          siswaKelas: `${userData.kelas}${userData.jurusan}`,
-          aksi: 'KELUAR_APLIKASI',
-          timestamp: new Date(),
-          waktu: new Date().toLocaleString('id-ID')
-        });
-        // Paksa keluar dari ujian
-        setUjianSoalAcak([]);
-        setUjianJawaban({});
-        setUjianSoalIndex(0);
-        setUjianSelesai(false);
-        ujianTersimpan.current = false;
-        setPage('ujianPilih');
-      }
-    };
-    document.addEventListener('visibilitychange', handleUjianVisibility);
-    return () => document.removeEventListener('visibilitychange', handleUjianVisibility);
-  }, [page, selectedUjian, userData]);
-
   // ── Timer quiz forum ──────────────────────────────────────────
   useEffect(() => {
     if (page === 'quiz' && !quizSelesai) {
@@ -340,31 +270,6 @@ function App() {
     }
     return () => clearInterval(timerRef.current);
   }, [page, quizSoalIndex, quizSelesai]);
-
-  // ── Timer UJIAN ───────────────────────────────────────────────
-  useEffect(() => {
-    if (page === 'ujianBerlangsung' && !ujianSelesai && ujianTimer > 0) {
-      ujianTimerRef.current = setInterval(() => {
-        setUjianTimer(prev => {
-          if (prev <= 1) {
-            clearInterval(ujianTimerRef.current);
-            setUjianSelesai(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(ujianTimerRef.current);
-  }, [page, ujianSelesai]);
-
-  // ── Save ujian when selesai ───────────────────────────────────
-  useEffect(() => {
-    if (ujianSelesai && !ujianTersimpan.current) {
-      ujianTersimpan.current = true;
-      simpanHasilUjian();
-    }
-  }, [ujianSelesai]);
 
   const handleNextSoal = (timeout = false) => {
     clearInterval(timerRef.current);
@@ -447,267 +352,6 @@ function App() {
       });
     } catch (err) { console.error('Gagal simpan hasil quiz:', err); }
   };
-
-
-  // ══════════════════════════════════════════════════════════════════
-  // UJIAN FUNCTIONS
-  // ══════════════════════════════════════════════════════════════════
-
-  const loadUjianList = async () => {
-    setUjianLoading(true);
-    try {
-      const snap = await getDocs(collection(db, 'ujian'));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setUjianList(list);
-    } catch (e) { console.error(e); }
-    setUjianLoading(false);
-  };
-
-  // Cek apakah ujian sedang buka berdasarkan waktu
-  const cekUjianTerbuka = (ujian) => {
-    if (ujian.status !== 'aktif') return false;
-    if (!ujian.tanggal || !ujian.jamMulai || !ujian.durasi) return true;
-    const now = new Date();
-    const [year, month, day] = ujian.tanggal.split('-');
-    const [hour, minute] = ujian.jamMulai.split(':');
-    const mulai = new Date(year, month - 1, day, hour, minute, 0);
-    const selesai = new Date(mulai.getTime() + ujian.durasi * 60 * 1000);
-    return now >= mulai && now <= selesai;
-  };
-
-  const getSisaWaktuUjian = (ujian) => {
-    if (!ujian.tanggal || !ujian.jamMulai || !ujian.durasi) return ujian.durasi * 60;
-    const now = new Date();
-    const [year, month, day] = ujian.tanggal.split('-');
-    const [hour, minute] = ujian.jamMulai.split(':');
-    const mulai = new Date(year, month - 1, day, hour, minute, 0);
-    const selesai = new Date(mulai.getTime() + ujian.durasi * 60 * 1000);
-    return Math.max(0, Math.floor((selesai - now) / 1000));
-  };
-
-  const loadSoalUjian = async (ujianId) => {
-    const q = query(collection(db, 'soalUjian'), where('ujianId', '==', ujianId));
-    const snap = await getDocs(q);
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    list.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
-    setSoalUjianList(list);
-    return list;
-  };
-
-  const tambahSoalUjian = async () => {
-    if (!soalUjianBaru.soal.trim() || !selectedUjian) return;
-    if (soalUjianList.length >= 50) { setUjianMsg('❌ Maksimal 50 soal!'); return; }
-    try {
-      const docRef = await addDoc(collection(db, 'soalUjian'), {
-        ujianId: selectedUjian.id,
-        soal: soalUjianBaru.soal.trim(),
-        opsi: soalUjianBaru.opsi,
-        kunci: soalUjianBaru.kunci,
-        urutan: soalUjianList.length + 1,
-        createdAt: new Date()
-      });
-      setSoalUjianList(prev => [...prev, { id: docRef.id, ...soalUjianBaru, ujianId: selectedUjian.id, urutan: soalUjianList.length + 1 }]);
-      setSoalUjianBaru({ soal: '', opsi: ['A. ','B. ','C. ','D. ','E. '], kunci: 'A' });
-      setUjianMsg(`✅ Soal ${soalUjianList.length + 1} berhasil ditambahkan!`);
-      setTimeout(() => setUjianMsg(''), 2000);
-    } catch (e) { setUjianMsg('❌ Gagal: ' + e.message); }
-  };
-
-  const hapusSoalUjian = async (soalId) => {
-    await deleteDoc(doc(db, 'soalUjian', soalId));
-    setSoalUjianList(prev => prev.filter(s => s.id !== soalId));
-  };
-
-  const simpanUjian = async () => {
-    if (!ujianForm.nama || !ujianForm.jenis || !ujianForm.mapel) {
-      setUjianMsg('❌ Nama, jenis, dan mapel wajib diisi!'); return;
-    }
-    try {
-      if (selectedUjian?.id) {
-        await updateDoc(doc(db, 'ujian', selectedUjian.id), { ...ujianForm, updatedAt: new Date() });
-        setUjianMsg('✅ Ujian berhasil diperbarui!');
-      } else {
-        const docRef = await addDoc(collection(db, 'ujian'), { ...ujianForm, createdAt: new Date() });
-        const newUjian = { id: docRef.id, ...ujianForm };
-        setSelectedUjian(newUjian);
-        setUjianList(prev => [newUjian, ...prev]);
-        setUjianMsg('✅ Ujian berhasil dibuat! Sekarang tambahkan soal.');
-      }
-      await catatAktivitas('KELOLA_UJIAN', `${selectedUjian?.id ? 'Edit' : 'Buat'} ujian: ${ujianForm.nama}`);
-    } catch (e) { setUjianMsg('❌ Gagal: ' + e.message); }
-    setTimeout(() => setUjianMsg(''), 3000);
-  };
-
-  const hapusUjian = async (ujianId, namaUjian) => {
-    if (!window.confirm(`Hapus ujian "${namaUjian}"?`)) return;
-    await deleteDoc(doc(db, 'ujian', ujianId));
-    setUjianList(prev => prev.filter(u => u.id !== ujianId));
-    await catatAktivitas('HAPUS_UJIAN', `Menghapus ujian: ${namaUjian}`);
-    setUjianMsg('🗑️ Ujian dihapus!');
-    setTimeout(() => setUjianMsg(''), 2000);
-  };
-
-  const ubahStatusUjian = async (ujianId, status) => {
-    await updateDoc(doc(db, 'ujian', ujianId), { status });
-    setUjianList(prev => prev.map(u => u.id === ujianId ? { ...u, status } : u));
-    if (selectedUjian?.id === ujianId) setSelectedUjian(prev => ({ ...prev, status }));
-    await catatAktivitas('STATUS_UJIAN', `Set ujian ${ujianId} → ${status}`);
-    setUjianMsg(`✅ Status diubah ke: ${status}`);
-    setTimeout(() => setUjianMsg(''), 2000);
-  };
-
-  // Kelola peserta & pengawas
-  const loadPesertaPengawas = async (ujianId) => {
-    const [pesSnap, pengSnap, sisnap, guruSnap] = await Promise.all([
-      getDocs(query(collection(db, 'pesertaUjian'), where('ujianId', '==', ujianId), where('tipe', '==', 'siswa'))),
-      getDocs(query(collection(db, 'pesertaUjian'), where('ujianId', '==', ujianId), where('tipe', '==', 'pengawas'))),
-      getDocs(query(collection(db, 'users'), where('role', '==', 'siswa'), where('status', '==', 'approved'))),
-      getDocs(query(collection(db, 'users'), where('role', '==', 'guru'), where('status', '==', 'approved')))
-    ]);
-    setPesertaUjianList(pesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    setPengawasUjianList(pengSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    setAllSiswaForUjian(sisnap.docs.map(d => d.data()));
-    setAllGuruForUjian(guruSnap.docs.map(d => d.data()));
-  };
-
-  const tambahPeserta = async (user, tipe) => {
-    const existing = tipe === 'siswa'
-      ? pesertaUjianList.find(p => p.userId === user.uid)
-      : pengawasUjianList.find(p => p.userId === user.uid);
-    if (existing) { setUjianMsg('❌ Sudah ada!'); setTimeout(() => setUjianMsg(''), 2000); return; }
-    const docRef = await addDoc(collection(db, 'pesertaUjian'), {
-      ujianId: selectedUjian.id,
-      userId: user.uid,
-      nama: user.nama,
-      kelas: user.kelas ? `${user.kelas}${user.jurusan}` : '-',
-      tipe,
-      createdAt: new Date()
-    });
-    const newEntry = { id: docRef.id, ujianId: selectedUjian.id, userId: user.uid, nama: user.nama, kelas: user.kelas ? `${user.kelas}${user.jurusan}` : '-', tipe };
-    if (tipe === 'siswa') setPesertaUjianList(prev => [...prev, newEntry]);
-    else setPengawasUjianList(prev => [...prev, newEntry]);
-    setUjianMsg(`✅ ${tipe === 'siswa' ? 'Siswa' : 'Pengawas'} ditambahkan!`);
-    setTimeout(() => setUjianMsg(''), 2000);
-  };
-
-  const hapusPeserta = async (entryId, tipe) => {
-    await deleteDoc(doc(db, 'pesertaUjian', entryId));
-    if (tipe === 'siswa') setPesertaUjianList(prev => prev.filter(p => p.id !== entryId));
-    else setPengawasUjianList(prev => prev.filter(p => p.id !== entryId));
-  };
-
-  // Siswa: mulai ujian
-  const mulaiUjian = async (ujian) => {
-    setUjianLoading(true);
-    try {
-      const soalList = await loadSoalUjian(ujian.id);
-      if (soalList.length === 0) { setUjianMsg('❌ Belum ada soal!'); setUjianLoading(false); return; }
-      // Acak soal untuk siswa ini
-      const acak = [...soalList].sort(() => Math.random() - 0.5);
-      setUjianSoalAcak(acak);
-      setUjianJawaban({});
-      setUjianSoalIndex(0);
-      setUjianSelesai(false);
-      ujianTersimpan.current = false;
-      // Set timer
-      const sisaDetik = getSisaWaktuUjian(ujian);
-      setUjianTimer(sisaDetik > 0 ? sisaDetik : ujian.durasi * 60);
-      setSelectedUjian(ujian);
-      // Catat mulai ujian
-      await addDoc(collection(db, 'aktivitasUjian'), {
-        ujianId: ujian.id, siswaId: userData.uid, siswaNama: userData.nama,
-        siswaKelas: `${userData.kelas}${userData.jurusan}`, aksi: 'MULAI_UJIAN',
-        timestamp: new Date(), waktu: new Date().toLocaleString('id-ID')
-      });
-      setPage('ujianBerlangsung');
-    } catch (e) { setUjianMsg('❌ Gagal: ' + e.message); }
-    setUjianLoading(false);
-  };
-
-  const simpanHasilUjian = async () => {
-    if (!userData || !selectedUjian) return;
-    let benar = 0;
-    ujianSoalAcak.forEach(s => { if (ujianJawaban[s.id] === s.kunci) benar++; });
-    const nilai = Math.round((benar / ujianSoalAcak.length) * 100);
-    try {
-      await addDoc(collection(db, 'hasilUjian'), {
-        ujianId: selectedUjian.id, ujianNama: selectedUjian.nama,
-        siswaId: userData.uid, siswaNama: userData.nama,
-        siswaKelas: `${userData.kelas}${userData.jurusan}`, nisn: userData.nisn,
-        nilai, benar, total: ujianSoalAcak.length,
-        jawabanDetail: ujianSoalAcak.map(s => ({ soalId: s.id, jawaban: ujianJawaban[s.id] || '-', kunci: s.kunci, benar: ujianJawaban[s.id] === s.kunci })),
-        timestamp: new Date(), waktu: new Date().toLocaleString('id-ID')
-      });
-      await addDoc(collection(db, 'aktivitasUjian'), {
-        ujianId: selectedUjian.id, siswaId: userData.uid, siswaNama: userData.nama,
-        siswaKelas: `${userData.kelas}${userData.jurusan}`, aksi: 'SELESAI_UJIAN',
-        nilai, timestamp: new Date(), waktu: new Date().toLocaleString('id-ID')
-      });
-      setUjianHasilSaya({ nilai, benar, total: ujianSoalAcak.length });
-    } catch (e) { console.error('Gagal simpan hasil ujian:', e); }
-  };
-
-  const cekSudahUjian = async (ujianId) => {
-    const q = query(collection(db, 'hasilUjian'), where('ujianId', '==', ujianId), where('siswaId', '==', userData.uid));
-    const snap = await getDocs(q);
-    if (!snap.empty) return snap.docs[0].data();
-    return null;
-  };
-
-  // Guru Pengawas: monitor realtime
-  const loadMonitor = async (ujianId) => {
-    setMonitorLoading(true);
-    try {
-      const [aktSnap, hasilSnap] = await Promise.all([
-        getDocs(query(collection(db, 'aktivitasUjian'), where('ujianId', '==', ujianId))),
-        getDocs(query(collection(db, 'hasilUjian'), where('ujianId', '==', ujianId)))
-      ]);
-      const aktList = aktSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const hasilList = hasilSnap.docs.map(d => d.data());
-      // Group per siswa
-      const siswaMap = {};
-      aktList.forEach(a => {
-        if (!siswaMap[a.siswaId]) siswaMap[a.siswaId] = { nama: a.siswaNama, kelas: a.siswaKelas, aksi: [], sudahSelesai: false, pelanggaran: 0 };
-        siswaMap[a.siswaId].aksi.push(a);
-        if (a.aksi === 'SELESAI_UJIAN') siswaMap[a.siswaId].sudahSelesai = true;
-        if (a.aksi === 'KELUAR_APLIKASI') siswaMap[a.siswaId].pelanggaran++;
-      });
-      hasilList.forEach(h => {
-        if (siswaMap[h.siswaId]) siswaMap[h.siswaId].nilai = h.nilai;
-      });
-      setMonitorData(Object.values(siswaMap));
-    } catch (e) { console.error(e); }
-    setMonitorLoading(false);
-  };
-
-  // Guru Mapel: rekap nilai
-  const loadRekapNilai = async (ujianId) => {
-    setRekapLoading(true);
-    try {
-      const snap = await getDocs(query(collection(db, 'hasilUjian'), where('ujianId', '==', ujianId)));
-      const list = snap.docs.map(d => d.data());
-      list.sort((a, b) => b.nilai - a.nilai);
-      setRekapNilai(list);
-    } catch (e) { console.error(e); }
-    setRekapLoading(false);
-  };
-
-  // Format timer
-  const formatTimer = (detik) => {
-    const m = Math.floor(detik / 60).toString().padStart(2, '0');
-    const s = (detik % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
-  // Cek role guru untuk ujian
-  const cekRoleGuruUjian = (ujian) => {
-    if (!userData || !ujian) return 'none';
-    // Guru mapel yang mengajar mapel ujian
-    if (ujian.mapel === userData.mapel) return 'mapel';
-    return 'pengawas'; // default jika terdaftar sebagai pengawas
-  };
-
 
   // Kamera & form helpers
   const startKameraSiswa = async () => {
@@ -822,10 +466,25 @@ function App() {
   };
 
   // Admin functions
-  const loginAdmin = () => {
-    if (adminEmail === ADMIN_EMAIL && adminPassword === ADMIN_PASSWORD) {
+  const loginAdmin = async () => {
+    if (!adminEmail || !adminPassword) { setAdminError('Email dan password wajib diisi!'); return; }
+    setLoading(true); setAdminError('');
+    try {
+      const cred = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+      const docSnap = await getDoc(doc(db, 'users', cred.user.uid));
+      const data = docSnap.exists() ? docSnap.data() : null;
+      if (!data || data.role !== 'admin' || data.status !== 'approved') {
+        await signOut(auth);
+        setAdminError('Akun ini tidak memiliki akses admin.');
+        setLoading(false);
+        return;
+      }
+      setUserData(data); setUserRole('admin');
       setAdminError(''); loadAdminUsers('pending'); setAdminTab('pending'); setPage('adminDashboard');
-    } else { setAdminError('Email atau password admin salah!'); }
+    } catch (e) {
+      setAdminError('Email atau password admin salah!');
+    }
+    setLoading(false);
   };
 
   const loadAdminUsers = async (status) => {
@@ -921,11 +580,10 @@ function App() {
   const loadAdminStats = async () => {
     setAdminStatsLoading(true);
     try {
-      const [userSnap, diskusiSnap, quizSnap, ujianSnap] = await Promise.all([
+      const [userSnap, diskusiSnap, quizSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'diskusi')),
-        getDocs(collection(db, 'hasilQuiz')),
-        getDocs(collection(db, 'ujian'))
+        getDocs(collection(db, 'hasilQuiz'))
       ]);
       const users = userSnap.docs.map(d => d.data());
       const siswaAktif = users.filter(u => u.role === 'siswa' && u.status === 'approved');
@@ -937,7 +595,7 @@ function App() {
         siswaAktif: siswaAktif.length, guruAktif: guruAktif.length, pending: pending.length,
         totalDiskusi: diskusiSnap.size, totalQuiz: quizSnap.size,
         avgPoin: siswaAktif.length ? Math.round(totalPoin / siswaAktif.length) : 0,
-        totalUser: users.length, totalUjian: ujianSnap.size
+        totalUser: users.length
       });
     } catch (e) { console.error(e); }
     setAdminStatsLoading(false);
@@ -1202,8 +860,6 @@ function App() {
   const handleLongPressEnd = () => { clearTimeout(longPressTimer.current); };
 
   const logout = async () => {
-    clearInterval(ujianTimerRef.current);
-    clearInterval(monitorIntervalRef.current);
     await signOut(auth);
     setUserData(null); setUserRole(null); setLoginError('');
     setPage('role');
@@ -1409,13 +1065,13 @@ function App() {
       {adminError && <div style={S.errBox}>⚠️ {adminError}</div>}
       <div style={{ width: '100%' }}>
         <label style={S.label}>Email Admin:</label>
-        <input style={S.input} type="email" placeholder="admin@ejulu.com" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} />
+        <input style={S.input} type="email" placeholder="admin@sekolah.sch.id" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} />
         <label style={S.label}>Password Admin:</label>
         <div style={S.pwWrap}>
           <input style={{ ...S.input, paddingRight: '40px' }} type={showAdminPassword ? 'text' : 'password'} placeholder="••••••••" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} />
           <button style={S.eyeBtn} onClick={() => setShowAdminPassword(!showAdminPassword)}>{showAdminPassword ? '🙈' : '👁️'}</button>
         </div>
-        <button style={{ ...S.btnOrange, marginTop: '16px' }} onClick={loginAdmin}>🔐 Masuk sebagai Admin</button>
+        <button style={{ ...S.btnOrange, marginTop: '16px' }} onClick={loginAdmin} disabled={loading}>{loading ? '⏳ Memproses...' : '🔐 Masuk sebagai Admin'}</button>
       </div>
     </div>
   );
@@ -1436,7 +1092,6 @@ function App() {
             { label: 'Pending', val: adminStats.pending, icon: '⏳', color: '#f59e0b' },
             { label: 'Diskusi', val: adminStats.totalDiskusi, icon: '💬', color: '#8b5cf6' },
             { label: 'Quiz', val: adminStats.totalQuiz, icon: '📝', color: '#ef4444' },
-            { label: 'Ujian', val: adminStats.totalUjian, icon: '📋', color: '#06b6d4' },
           ].map((s, i) => (
             <div key={i} style={{ background: 'white', borderRadius: '12px', padding: '12px 10px', textAlign: 'center', border: `1px solid ${s.color}22`, boxShadow: `0 2px 8px ${s.color}15` }}>
               <div style={{ fontSize: '20px', marginBottom: '2px' }}>{s.icon}</div>
@@ -1465,7 +1120,6 @@ function App() {
       <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '12px' }}>
         <button onClick={() => setPage('adminSettings')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>⚙️ Pengaturan</button>
         <button onClick={() => { setAdminTab('mapel'); loadMapelAdmin(); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: adminTab === 'mapel' ? 'none' : '1px solid #e2e8f0', background: adminTab === 'mapel' ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'white', color: adminTab === 'mapel' ? 'white' : '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📐 Mapel</button>
-        <button onClick={() => { setAdminTab('ujian'); loadUjianList(); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: adminTab === 'ujian' ? 'none' : '1px solid #e2e8f0', background: adminTab === 'ujian' ? 'linear-gradient(135deg,#f97316,#ea580c)' : 'white', color: adminTab === 'ujian' ? 'white' : '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📋 Ujian</button>
       </div>
       {adminLoading && <LoadingSpinner />}
 
@@ -1551,7 +1205,6 @@ function App() {
                 { label: '⏳ Pending', val: adminStats.pending, color: '#f59e0b' },
                 { label: '💬 Diskusi', val: adminStats.totalDiskusi, color: '#8b5cf6' },
                 { label: '📝 Quiz', val: adminStats.totalQuiz, color: '#ef4444' },
-                { label: '📋 Ujian', val: adminStats.totalUjian, color: '#f97316' },
                 { label: '🏆 Avg Poin', val: adminStats.avgPoin, color: '#06b6d4' },
               ].map((s, i) => (
                 <div key={i} style={{ ...S.card, border: `1px solid ${s.color}33`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1678,544 +1331,6 @@ function App() {
         </div>
       )}
 
-      {/* ── TAB UJIAN ADMIN ── */}
-      {adminTab === 'ujian' && (
-        <div style={{ width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <p style={{ color: '#f97316', fontWeight: '800', fontSize: '15px', margin: 0 }}>📋 Manajemen Ujian</p>
-            <button onClick={() => { setSelectedUjian(null); setUjianForm({ nama: '', jenis: 'UTS', mapel: '', kelas: '', tanggal: '', jamMulai: '', durasi: 90, status: 'draft' }); setSoalUjianList([]); setUjianAdminTab('form'); setPage('adminKelolUjian'); }}
-              style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-              + Buat Ujian
-            </button>
-          </div>
-          {ujianMsg && <div style={S.successBox}>{ujianMsg}</div>}
-          {ujianLoading && <LoadingSpinner />}
-          {ujianList.length === 0 && !ujianLoading && (
-            <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '8px' }}>📋</div>
-              <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Belum ada ujian. Buat ujian pertama!</p>
-            </div>
-          )}
-          {ujianList.map((u, i) => (
-            <div key={i} style={{ ...S.card, border: `1px solid ${u.status === 'aktif' ? '#86efac' : u.status === 'selesai' ? '#bfdbfe' : '#e2e8f0'}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{u.nama}</p>
-                  <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 2px' }}>{u.jenis} · {u.mapel} · {u.kelas || 'Semua kelas'}</p>
-                  {u.tanggal && <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>📅 {u.tanggal} {u.jamMulai} · ⏱️ {u.durasi} menit</p>}
-                </div>
-                <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '20px', background: u.status === 'aktif' ? '#16a34a' : u.status === 'selesai' ? '#2563eb' : '#94a3b8', color: 'white', fontWeight: '700', whiteSpace: 'nowrap', marginLeft: '8px' }}>
-                  {u.status === 'aktif' ? '🟢 Aktif' : u.status === 'selesai' ? '✅ Selesai' : '📝 Draft'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                <button onClick={() => { setSelectedUjian(u); setUjianForm({ nama: u.nama, jenis: u.jenis, mapel: u.mapel, kelas: u.kelas || '', tanggal: u.tanggal || '', jamMulai: u.jamMulai || '', durasi: u.durasi || 90, status: u.status }); loadSoalUjian(u.id); loadPesertaPengawas(u.id); setUjianAdminTab('form'); setPage('adminKelolUjian'); }}
-                  style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>✏️ Edit</button>
-                <button onClick={() => ubahStatusUjian(u.id, u.status === 'aktif' ? 'draft' : 'aktif')}
-                  style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: u.status === 'aktif' ? '#f59e0b' : '#16a34a', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-                  {u.status === 'aktif' ? '⏸ Tutup' : '▶ Aktifkan'}
-                </button>
-                <button onClick={() => hapusUjian(u.id, u.nama)}
-                  style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#dc2626', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>🗑️</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-
-  // ══════════════════════════════════════════════════════════════════
-  // ADMIN KELOLA UJIAN (Edit form + soal + peserta)
-  // ══════════════════════════════════════════════════════════════════
-  if (page === 'adminKelolUjian') return (
-    <div style={S.page}>
-      <TopBar />
-      <BackBtn to="adminDashboard" fn={() => { setAdminTab('ujian'); setPage('adminDashboard'); }} />
-      {ujianMsg && <div style={ujianMsg.startsWith('✅') ? S.successBox : S.errBox}>{ujianMsg}</div>}
-      <p style={{ color: '#f97316', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📋 {selectedUjian ? 'Edit Ujian' : 'Buat Ujian Baru'}</p>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '16px' }}>
-        {[{ key: 'form', label: '📝 Info' }, { key: 'soal', label: `❓ Soal (${soalUjianList.length}/50)` }, { key: 'peserta', label: '👥 Peserta' }].map(t => (
-          <button key={t.key} onClick={() => setUjianAdminTab(t.key)}
-            style={{ flex: 1, padding: '10px 4px', borderRadius: '10px', border: 'none', fontSize: '11px', background: ujianAdminTab === t.key ? '#f97316' : '#f1f5f9', color: ujianAdminTab === t.key ? 'white' : '#64748b', fontWeight: '700', cursor: 'pointer' }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab: Form Info Ujian */}
-      {ujianAdminTab === 'form' && (
-        <div style={{ width: '100%' }}>
-          <label style={S.label}>Nama Ujian *</label>
-          <input style={S.input} placeholder="Contoh: UTS Matematika Kelas 10" value={ujianForm.nama} onChange={e => setUjianForm(p => ({ ...p, nama: e.target.value }))} />
-          <label style={S.label}>Jenis Ujian *</label>
-          <select style={S.select} value={ujianForm.jenis} onChange={e => setUjianForm(p => ({ ...p, jenis: e.target.value }))}>
-            {jenisUjianList.map(j => <option key={j} value={j}>{j}</option>)}
-          </select>
-          <label style={S.label}>Mata Pelajaran *</label>
-          <select style={S.select} value={ujianForm.mapel} onChange={e => setUjianForm(p => ({ ...p, mapel: e.target.value }))}>
-            <option value="">Pilih Mapel</option>
-            {mapelList.map(m => <option key={m.id} value={m.nama}>{m.nama}</option>)}
-          </select>
-          <label style={S.label}>Kelas (kosongkan = semua kelas)</label>
-          <input style={S.input} placeholder="Contoh: 10A atau 10 (semua jurusan kelas 10)" value={ujianForm.kelas} onChange={e => setUjianForm(p => ({ ...p, kelas: e.target.value }))} />
-          <label style={S.label}>Tanggal Ujian</label>
-          <input style={S.input} type="date" value={ujianForm.tanggal} onChange={e => setUjianForm(p => ({ ...p, tanggal: e.target.value }))} />
-          <label style={S.label}>Jam Mulai</label>
-          <input style={S.input} type="time" value={ujianForm.jamMulai} onChange={e => setUjianForm(p => ({ ...p, jamMulai: e.target.value }))} />
-          <label style={S.label}>Durasi (menit)</label>
-          <input style={S.input} type="number" placeholder="90" value={ujianForm.durasi} onChange={e => setUjianForm(p => ({ ...p, durasi: Number(e.target.value) }))} />
-          <label style={S.label}>Status</label>
-          <select style={S.select} value={ujianForm.status} onChange={e => setUjianForm(p => ({ ...p, status: e.target.value }))}>
-            <option value="draft">📝 Draft (belum aktif)</option>
-            <option value="aktif">🟢 Aktif (siswa bisa masuk)</option>
-            <option value="selesai">✅ Selesai</option>
-          </select>
-          <button onClick={simpanUjian} style={{ ...S.btnOrange }}>
-            💾 {selectedUjian ? 'Perbarui Ujian' : 'Buat Ujian'}
-          </button>
-          {selectedUjian && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-              <button onClick={() => ubahStatusUjian(selectedUjian.id, 'aktif')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: '#16a34a', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>🟢 Aktifkan</button>
-              <button onClick={() => ubahStatusUjian(selectedUjian.id, 'draft')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: '#94a3b8', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>📝 Draft</button>
-              <button onClick={() => ubahStatusUjian(selectedUjian.id, 'selesai')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: '#2563eb', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>✅ Selesai</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Soal Ujian */}
-      {ujianAdminTab === 'soal' && (
-        <div style={{ width: '100%' }}>
-          {!selectedUjian && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#94a3b8' }}>Simpan info ujian dulu sebelum tambah soal.</p></div>}
-          {selectedUjian && (
-            <>
-              <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px' }}>{soalUjianList.length}/50 soal · {selectedUjian.mapel}</p>
-              {soalUjianList.map((q, i) => (
-                <div key={q.id} style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ color: '#4f46e5', fontWeight: '700', fontSize: '13px' }}>Soal {i + 1}</span>
-                    <button onClick={() => hapusSoalUjian(q.id)} style={{ background: '#dc2626', border: 'none', color: 'white', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px' }}>🗑️</button>
-                  </div>
-                  <p style={{ color: '#0f172a', fontSize: '13px', lineHeight: '1.5', marginBottom: '6px' }}>{q.soal}</p>
-                  {q.opsi.map((op, j) => (
-                    <p key={j} style={{ color: op[0] === q.kunci ? '#16a34a' : '#64748b', fontSize: '12px', margin: '2px 0' }}>
-                      {op[0] === q.kunci ? '✅ ' : ''}{op}
-                    </p>
-                  ))}
-                </div>
-              ))}
-              {soalUjianList.length < 50 && (
-                <div style={{ ...S.card, border: '2px dashed #f97316', marginTop: '8px' }}>
-                  <p style={{ color: '#f97316', fontWeight: '700', marginBottom: '10px' }}>+ Tambah Soal #{soalUjianList.length + 1}</p>
-                  <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Tulis pertanyaan..." value={soalUjianBaru.soal} onChange={e => setSoalUjianBaru(p => ({ ...p, soal: e.target.value }))} />
-                  {soalUjianBaru.opsi.map((op, j) => (
-                    <input key={j} style={{ ...S.input, marginBottom: '6px' }} value={op} onChange={e => setSoalUjianBaru(p => ({ ...p, opsi: p.opsi.map((o, k) => k === j ? e.target.value : o) }))} />
-                  ))}
-                  <label style={S.label}>Kunci Jawaban</label>
-                  <select style={S.select} value={soalUjianBaru.kunci} onChange={e => setSoalUjianBaru(p => ({ ...p, kunci: e.target.value }))}>
-                    {['A','B','C','D','E'].map(k => <option key={k} value={k}>{k}</option>)}
-                  </select>
-                  <button onClick={tambahSoalUjian} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', cursor: 'pointer' }}>
-                    ✅ Simpan Soal
-                  </button>
-                </div>
-              )}
-              {soalUjianList.length >= 50 && <div style={{ ...S.card, textAlign: 'center', border: '1px solid #86efac' }}><p style={{ color: '#16a34a', fontWeight: '700' }}>✅ 50 Soal sudah lengkap!</p></div>}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Peserta & Pengawas */}
-      {ujianAdminTab === 'peserta' && (
-        <div style={{ width: '100%' }}>
-          {!selectedUjian && <div style={{ ...S.card, textAlign: 'center' }}><p style={{ color: '#94a3b8' }}>Simpan info ujian dulu.</p></div>}
-          {selectedUjian && (
-            <>
-              {/* Pengawas */}
-              <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-                <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>👨‍🏫 Guru Pengawas ({pengawasUjianList.length})</p>
-                {pengawasUjianList.map((p, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#0f172a', fontWeight: '600' }}>{p.nama}</p>
-                    <button onClick={() => hapusPeserta(p.id, 'pengawas')} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px' }}>✕</button>
-                  </div>
-                ))}
-                <p style={{ color: '#64748b', fontWeight: '700', fontSize: '12px', marginTop: '10px', marginBottom: '8px' }}>+ Tambah Pengawas</p>
-                <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                  {allGuruForUjian.filter(g => !pengawasUjianList.find(p => p.userId === g.uid)).map(g => (
-                    <button key={g.uid} onClick={() => tambahPeserta(g, 'pengawas')}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#0f172a', fontSize: '13px', cursor: 'pointer', textAlign: 'left', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{g.nama}</span><span style={{ color: '#4f46e5', fontSize: '12px' }}>+ Tambah</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Siswa Peserta */}
-              <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
-                <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>🎓 Siswa Peserta ({pesertaUjianList.length})</p>
-                {pesertaUjianList.length > 0 && (
-                  <div style={{ maxHeight: '120px', overflowY: 'auto', marginBottom: '10px' }}>
-                    {pesertaUjianList.map((p, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#0f172a' }}>{p.nama} <span style={{ color: '#94a3b8' }}>· {p.kelas}</span></p>
-                        <button onClick={() => hapusPeserta(p.id, 'siswa')} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px' }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p style={{ color: '#64748b', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>+ Tambah Siswa</p>
-                <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                  {allSiswaForUjian.filter(s => !pesertaUjianList.find(p => p.userId === s.uid)).map(s => (
-                    <button key={s.uid} onClick={() => tambahPeserta(s, 'siswa')}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#0f172a', fontSize: '12px', cursor: 'pointer', textAlign: 'left', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{s.nama} <span style={{ color: '#94a3b8' }}>{s.kelas}{s.jurusan}</span></span>
-                      <span style={{ color: '#16a34a', fontSize: '12px' }}>+ Tambah</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-
-  // ══════════════════════════════════════════════════════════════════
-  // UJIAN — PILIH UJIAN (Siswa & Guru)
-  // ══════════════════════════════════════════════════════════════════
-  if (page === 'ujianPilih') return (
-    <div style={S.page}>
-      <TopBar />
-      <BackBtn to="dashboard" fn={() => { clearInterval(monitorIntervalRef.current); setPage('dashboard'); }} />
-      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📋 Ujian Sekolah</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih ujian yang tersedia</p>
-      {ujianMsg && <div style={ujianMsg.startsWith('✅') ? S.successBox : S.errBox}>{ujianMsg}</div>}
-      {ujianLoading && <LoadingSpinner />}
-      {ujianList.length === 0 && !ujianLoading && (
-        <div style={{ ...S.card, textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
-          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada ujian tersedia.</p>
-        </div>
-      )}
-      {ujianList.map((u, i) => {
-        const isOpen = cekUjianTerbuka(u);
-        const isGuru = userRole === 'guru';
-        const roleGuru = isGuru ? cekRoleGuruUjian(u) : null;
-        return (
-          <div key={i} style={{ ...S.card, border: `2px solid ${isOpen ? '#86efac' : u.status === 'selesai' ? '#bfdbfe' : '#e2e8f0'}`, background: isOpen ? '#f0fdf4' : 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: '800', fontSize: '15px', margin: '0 0 3px', color: '#0f172a' }}>{u.nama}</p>
-                <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 2px' }}>{u.jenis} · {u.mapel}</p>
-                {u.tanggal && <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>📅 {u.tanggal} pukul {u.jamMulai} · ⏱️ {u.durasi} menit</p>}
-              </div>
-              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', background: isOpen ? '#16a34a' : u.status === 'selesai' ? '#2563eb' : '#94a3b8', color: 'white', fontWeight: '700', whiteSpace: 'nowrap', marginLeft: '8px' }}>
-                {isOpen ? '🟢 Buka' : u.status === 'selesai' ? '✅ Selesai' : '🔒 Tutup'}
-              </span>
-            </div>
-            {/* Tombol aksi per role */}
-            {userRole === 'siswa' && isOpen && (
-              <button onClick={async () => {
-                setUjianMsg('');
-                const sudah = await cekSudahUjian(u.id);
-                if (sudah) { setUjianHasilSaya(sudah); setSelectedUjian(u); setPage('ujianHasil'); return; }
-                await mulaiUjian(u);
-              }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 14px rgba(249,115,22,0.35)' }}>
-                🚀 Mulai Ujian
-              </button>
-            )}
-            {userRole === 'siswa' && !isOpen && u.status === 'selesai' && (
-              <button onClick={async () => {
-                const sudah = await cekSudahUjian(u.id);
-                if (sudah) { setUjianHasilSaya(sudah); setSelectedUjian(u); setPage('ujianHasil'); }
-                else setUjianMsg('Kamu belum mengikuti ujian ini.');
-              }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #bfdbfe', background: 'white', color: '#2563eb', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-                📊 Lihat Nilai Saya
-              </button>
-            )}
-            {isGuru && (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {(roleGuru === 'pengawas' || true) && (
-                  <button onClick={() => { setSelectedUjian(u); loadMonitor(u.id); setPage('ujianMonitor'); }}
-                    style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#4f46e5,#4338ca)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-                    👁️ Monitor
-                  </button>
-                )}
-                <button onClick={() => { setSelectedUjian(u); loadRekapNilai(u.id); setPage('ujianRekap'); }}
-                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-                  📊 Rekap Nilai
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  // ══════════════════════════════════════════════════════════════════
-  // UJIAN BERLANGSUNG (Siswa)
-  // ══════════════════════════════════════════════════════════════════
-  if (page === 'ujianBerlangsung') {
-    if (ujianSelesai) {
-      const benar = ujianSoalAcak.filter(s => ujianJawaban[s.id] === s.kunci).length;
-      const nilai = ujianHasilSaya?.nilai ?? Math.round((benar / (ujianSoalAcak.length || 1)) * 100);
-      return (
-        <div style={{ ...S.page, justifyContent: 'center', textAlign: 'center', userSelect: 'none' }}>
-          <TopBar />
-          <div style={{ fontSize: '60px', marginBottom: '16px' }}>🎉</div>
-          <p style={{ color: '#16a34a', fontSize: '22px', fontWeight: '900', marginBottom: '16px' }}>Ujian Selesai!</p>
-          <div style={{ ...S.card, border: '1px solid #86efac', textAlign: 'left', marginBottom: '16px' }}>
-            <p style={{ color: '#16a34a', fontWeight: '700', marginBottom: '12px' }}>📊 Hasil Ujian</p>
-            <p style={{ color: '#0f172a', fontSize: '28px', fontWeight: '900', textAlign: 'center', margin: '0 0 8px' }}>{nilai}<span style={{ fontSize: '14px', color: '#64748b' }}>/100</span></p>
-            <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', margin: 0 }}>Benar: {benar} dari {ujianSoalAcak.length} soal</p>
-          </div>
-          <button onClick={() => { setPage('ujianPilih'); }} style={S.btnOrange}>← Kembali ke Daftar Ujian</button>
-        </div>
-      );
-    }
-
-    const soal = ujianSoalAcak[ujianSoalIndex];
-    if (!soal) return <div style={S.page}><TopBar /><LoadingSpinner /></div>;
-    const warnaTimer = ujianTimer > 600 ? '#16a34a' : ujianTimer > 300 ? '#f59e0b' : '#ef4444';
-    return (
-      <div style={{ ...S.page, userSelect: 'none', WebkitUserSelect: 'none' }}
-        onContextMenu={e => e.preventDefault()}>
-        <TopBar />
-        {/* Header info ujian */}
-        <div style={{ width: '100%', background: 'linear-gradient(135deg,#f97316,#ea580c)', borderRadius: '16px', padding: '12px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 14px rgba(249,115,22,0.35)' }}>
-          <div>
-            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '10px', fontWeight: '700', letterSpacing: '1px', margin: '0 0 2px' }}>SOAL {ujianSoalIndex + 1} / {ujianSoalAcak.length}</p>
-            <p style={{ color: 'white', fontSize: '13px', fontWeight: '700', margin: 0 }}>{selectedUjian?.nama}</p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ color: warnaTimer === '#16a34a' ? '#bbf7d0' : warnaTimer === '#f59e0b' ? '#fef3c7' : '#fca5a5', fontSize: '10px', margin: '0 0 2px' }}>SISA WAKTU</p>
-            <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', margin: 0 }}>{formatTimer(ujianTimer)}</p>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', marginBottom: '16px' }}>
-          <div style={{ height: '6px', background: 'linear-gradient(90deg,#f97316,#ea580c)', borderRadius: '3px', width: `${((ujianSoalIndex + 1) / ujianSoalAcak.length) * 100}%`, transition: 'width 0.3s' }} />
-        </div>
-
-        {/* Soal */}
-        <div style={{ ...S.card, border: '1px solid #fed7aa', marginBottom: '16px' }}>
-          <p style={{ fontSize: '16px', fontWeight: '600', lineHeight: '1.6', margin: 0, color: '#0f172a' }}>📌 {soal.soal}</p>
-        </div>
-
-        {/* Opsi */}
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {soal.opsi.map((op, i) => (
-            <button key={i}
-              onClick={() => setUjianJawaban(prev => ({ ...prev, [soal.id]: op[0] }))}
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: ujianJawaban[soal.id] === op[0] ? '2px solid #f97316' : '1.5px solid #e2e8f0', background: ujianJawaban[soal.id] === op[0] ? '#fff7ed' : 'white', color: ujianJawaban[soal.id] === op[0] ? '#ea580c' : '#0f172a', fontSize: '14px', cursor: 'pointer', textAlign: 'left', fontWeight: ujianJawaban[soal.id] === op[0] ? '700' : '400', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              {op}
-            </button>
-          ))}
-        </div>
-
-        {/* Navigasi */}
-        <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '20px' }}>
-          {ujianSoalIndex > 0 && (
-            <button onClick={() => setUjianSoalIndex(i => i - 1)}
-              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1.5px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '14px' }}>
-              ← Sebelumnya
-            </button>
-          )}
-          {ujianSoalIndex < ujianSoalAcak.length - 1 ? (
-            <button onClick={() => setUjianSoalIndex(i => i + 1)}
-              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', cursor: 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(249,115,22,0.3)' }}>
-              Selanjutnya →
-            </button>
-          ) : (
-            <button onClick={() => setUjianSelesai(true)}
-              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: '700', cursor: 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}>
-              ✅ Selesai & Kirim
-            </button>
-          )}
-        </div>
-
-        {/* Rangkuman jawaban */}
-        <div style={{ width: '100%', marginTop: '16px' }}>
-          <p style={{ color: '#64748b', fontSize: '11px', fontWeight: '700', marginBottom: '8px', letterSpacing: '0.5px' }}>RANGKUMAN JAWABAN</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {ujianSoalAcak.map((s, i) => (
-              <button key={i} onClick={() => setUjianSoalIndex(i)}
-                style={{ width: '32px', height: '32px', borderRadius: '8px', border: ujianSoalIndex === i ? '2px solid #f97316' : '1.5px solid #e2e8f0', background: ujianJawaban[s.id] ? '#fff7ed' : 'white', color: ujianJawaban[s.id] ? '#ea580c' : '#94a3b8', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {i + 1}
-              </button>
-            ))}
-          </div>
-          <p style={{ color: '#94a3b8', fontSize: '11px', marginTop: '6px' }}>
-            Terjawab: {Object.keys(ujianJawaban).length}/{ujianSoalAcak.length}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // HASIL UJIAN (Siswa lihat nilai)
-  // ══════════════════════════════════════════════════════════════════
-  if (page === 'ujianHasil') return (
-    <div style={S.page}>
-      <TopBar />
-      <BackBtn to="ujianPilih" />
-      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📊 Hasil Ujian</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>{selectedUjian?.nama}</p>
-      <div style={{ width: '100%', background: 'linear-gradient(135deg,#f97316,#ea580c)', borderRadius: '20px', padding: '32px 20px', textAlign: 'center', marginBottom: '16px', boxShadow: '0 8px 24px rgba(249,115,22,0.35)' }}>
-        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontWeight: '700', letterSpacing: '2px', margin: '0 0 8px' }}>NILAI KAMU</p>
-        <p style={{ color: 'white', fontSize: '64px', fontWeight: '900', margin: '0 0 4px', lineHeight: 1 }}>{ujianHasilSaya?.nilai ?? '-'}</p>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px', margin: 0 }}>dari 100</p>
-        {ujianHasilSaya && (
-          <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '12px' }}>
-            <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '13px', margin: 0 }}>
-              Benar: {ujianHasilSaya.benar} / {ujianHasilSaya.total} soal
-            </p>
-          </div>
-        )}
-      </div>
-      <div style={{ ...S.card }}>
-        <p style={{ color: '#0f172a', fontWeight: '700', fontSize: '14px', margin: '0 0 4px' }}>{selectedUjian?.nama}</p>
-        <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>{selectedUjian?.jenis} · {selectedUjian?.mapel}</p>
-      </div>
-      <button onClick={() => setPage('ujianPilih')} style={{ ...S.btnOrange }}>← Kembali</button>
-    </div>
-  );
-
-  // ══════════════════════════════════════════════════════════════════
-  // MONITOR UJIAN (Guru Pengawas - realtime)
-  // ══════════════════════════════════════════════════════════════════
-  if (page === 'ujianMonitor') return (
-    <div style={S.page}>
-      <TopBar />
-      <BackBtn to="ujianPilih" fn={() => { clearInterval(monitorIntervalRef.current); setPage('ujianPilih'); }} />
-      <p style={{ color: '#4f46e5', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>👁️ Monitor Ujian</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>{selectedUjian?.nama}</p>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', width: '100%' }}>
-        <button onClick={() => loadMonitor(selectedUjian.id)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', color: '#4f46e5', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>🔄 Refresh</button>
-        <button onClick={() => {
-          if (monitorIntervalRef.current) { clearInterval(monitorIntervalRef.current); monitorIntervalRef.current = null; setUjianMsg('⏸ Auto-refresh dimatikan'); }
-          else { monitorIntervalRef.current = setInterval(() => loadMonitor(selectedUjian.id), 10000); setUjianMsg('▶ Auto-refresh setiap 10 detik'); }
-          setTimeout(() => setUjianMsg(''), 2000);
-        }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: monitorIntervalRef.current ? '#4f46e5' : 'white', color: monitorIntervalRef.current ? 'white' : '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
-          {monitorIntervalRef.current ? '⏸ Stop' : '▶ Auto'}
-        </button>
-      </div>
-      {ujianMsg && <div style={S.successBox}>{ujianMsg}</div>}
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', width: '100%', marginBottom: '16px' }}>
-        {[
-          { label: 'Terdaftar', val: pesertaUjianList.length, color: '#3b82f6' },
-          { label: 'Sedang Ujian', val: monitorData.filter(m => !m.sudahSelesai && m.aksi.length > 0).length, color: '#f97316' },
-          { label: 'Selesai', val: monitorData.filter(m => m.sudahSelesai).length, color: '#16a34a' },
-        ].map((s, i) => (
-          <div key={i} style={{ background: 'white', borderRadius: '12px', padding: '12px 8px', textAlign: 'center', border: `1px solid ${s.color}22`, boxShadow: `0 2px 8px ${s.color}15` }}>
-            <div style={{ fontSize: '20px', fontWeight: '900', color: s.color }}>{s.val}</div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {monitorLoading && <LoadingSpinner />}
-      {monitorData.length === 0 && !monitorLoading && (
-        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
-          <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada aktivitas ujian.</p>
-        </div>
-      )}
-      {monitorData.map((m, i) => (
-        <div key={i} style={{ ...S.card, border: `1.5px solid ${m.pelanggaran > 0 ? '#fca5a5' : m.sudahSelesai ? '#86efac' : '#bfdbfe'}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{m.nama}</p>
-              <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>Kelas {m.kelas}</p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              {m.sudahSelesai ? (
-                <span style={{ background: '#16a34a', color: 'white', padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>✅ Selesai{m.nilai !== undefined ? ` · ${m.nilai}` : ''}</span>
-              ) : m.aksi.length > 0 ? (
-                <span style={{ background: '#f97316', color: 'white', padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>🔵 Ujian</span>
-              ) : (
-                <span style={{ background: '#94a3b8', color: 'white', padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>⏳ Belum</span>
-              )}
-            </div>
-          </div>
-          {m.pelanggaran > 0 && (
-            <div style={{ marginTop: '8px', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '8px 12px' }}>
-              <p style={{ color: '#e11d48', fontSize: '12px', fontWeight: '700', margin: 0 }}>
-                ⚠️ {m.pelanggaran}x keluar aplikasi!
-              </p>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-
-  // ══════════════════════════════════════════════════════════════════
-  // REKAP NILAI UJIAN (Guru Mapel)
-  // ══════════════════════════════════════════════════════════════════
-  if (page === 'ujianRekap') return (
-    <div style={S.page}>
-      <TopBar />
-      <BackBtn to="ujianPilih" />
-      <p style={{ color: '#10b981', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📊 Rekap Nilai</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>{selectedUjian?.nama}</p>
-      {rekapLoading && <LoadingSpinner />}
-      {rekapNilai.length === 0 && !rekapLoading && (
-        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
-          <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada siswa yang mengikuti ujian ini.</p>
-        </div>
-      )}
-      {rekapNilai.length > 0 && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', width: '100%', marginBottom: '16px' }}>
-            {[
-              { label: 'Peserta', val: rekapNilai.length, color: '#3b82f6' },
-              { label: 'Rata-rata', val: Math.round(rekapNilai.reduce((a, s) => a + s.nilai, 0) / rekapNilai.length), color: '#10b981' },
-              { label: 'Tertinggi', val: Math.max(...rekapNilai.map(s => s.nilai)), color: '#f59e0b' },
-            ].map((s, i) => (
-              <div key={i} style={{ background: 'white', borderRadius: '12px', padding: '12px 8px', textAlign: 'center', border: `1px solid ${s.color}22` }}>
-                <div style={{ fontSize: '20px', fontWeight: '900', color: s.color }}>{s.val}</div>
-                <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1.5px solid #bfdbfe', boxShadow: '0 4px 16px rgba(37,99,235,0.08)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 60px 60px', background: 'linear-gradient(135deg,#10b981,#059669)', padding: '10px 12px', gap: '8px', alignItems: 'center' }}>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontWeight: '700' }}>NO</div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontWeight: '700' }}>NAMA</div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontWeight: '700', textAlign: 'center' }}>NILAI</div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontWeight: '700', textAlign: 'center' }}>KELAS</div>
-            </div>
-            {rekapNilai.map((s, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 60px 60px', padding: '10px 12px', gap: '8px', alignItems: 'center', background: i % 2 === 0 ? 'white' : '#f8faff', borderTop: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '12px', fontWeight: '800', color: '#10b981', textAlign: 'center' }}>{i + 1}</div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontWeight: '700', fontSize: '13px', margin: 0, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.siswaNama}</p>
-                  <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>{s.nisn}</p>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '900', color: s.nilai >= 75 ? '#16a34a' : s.nilai >= 60 ? '#f59e0b' : '#ef4444' }}>{s.nilai}</span>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>{s.siswaKelas}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 
@@ -2307,7 +1422,7 @@ function App() {
       </div>
       <div style={{ ...S.card, border: '1px solid #fde68a' }}>
         <p style={{ color: '#d97706', fontWeight: 'bold', marginBottom: '8px' }}>🔐 Info Admin</p>
-        <p style={{ color: '#475569', fontSize: '13px', margin: 0 }}>Email: <strong style={{ color: '#0f172a' }}>{ADMIN_EMAIL}</strong></p>
+        <p style={{ color: '#475569', fontSize: '13px', margin: 0 }}>Email: <strong style={{ color: '#0f172a' }}>{userData?.email}</strong></p>
       </div>
     </div>
   );
