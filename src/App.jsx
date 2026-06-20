@@ -248,6 +248,34 @@ function App() {
     if (mapelEditList.length > 0) setMapelAktif(mapelEditList);
   }, [mapelEditList]);
 
+  // ── Bingkai tampilan desktop ────────────────────────────────────
+  // Cuma nyala di layar lebar (≥768px). Gak nyentuh satu pun komponen halaman —
+  // ini cuma nambah background & bayangan di LUAR kartu yang sudah ada.
+  // Tampilan HP/Android sama sekali tidak terpengaruh (selalu < 768px).
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.setAttribute('data-ejulu-desktop-frame', 'true');
+    style.textContent = `
+      @media (min-width: 768px) {
+        body {
+          background: linear-gradient(135deg,#eef2ff 0%,#e0e7ff 45%,#ede9fe 100%);
+        }
+        #root, body > div {
+          min-height: 100vh;
+          padding: 40px 0;
+          box-sizing: border-box;
+        }
+        #root > div, body > div > div {
+          box-shadow: 0 25px 70px rgba(30,41,99,0.18), 0 4px 20px rgba(30,41,99,0.08);
+          border-radius: 18px;
+          overflow: hidden;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => { document.head.removeChild(style); };
+  }, []);
+
   // ── Deteksi keluar app (bukan sekedar minimize) ─────────────
   useEffect(() => {
     let hiddenTime = null;
