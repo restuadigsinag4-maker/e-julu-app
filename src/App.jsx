@@ -2571,22 +2571,44 @@ function App() {
           </div>
         </div>
         {isTop50 && (
-          <div style={{ width: '100%', background: 'linear-gradient(160deg,#1a0a00,#2d1800,#3a2200)', border: '2px solid #b8860b', borderRadius: '20px', padding: '24px 20px', marginBottom: '14px', textAlign: 'center', boxShadow: `0 8px 32px rgba(184,134,11,0.3)`, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '60%', height: '2px', background: 'linear-gradient(90deg,transparent,#ffd700,transparent)' }} />
-            <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '60%', height: '2px', background: 'linear-gradient(90deg,transparent,#ffd700,transparent)' }} />
-            <div style={{ fontSize: '48px', marginBottom: '8px' }}>{badge.icon}</div>
-            <p style={{ fontSize: '10px', color: 'rgba(255,200,0,0.5)', letterSpacing: '3px', margin: '0 0 4px', fontWeight: '700' }}>SERTIFIKAT DIGITAL</p>
-            <p style={{ fontSize: '13px', color: 'rgba(255,200,0,0.7)', letterSpacing: '2px', margin: '0 0 16px', fontWeight: '600' }}>E-JULU ACHIEVEMENT</p>
-            <div style={{ width: '100%', height: '1px', background: 'linear-gradient(90deg,transparent,#b8860b,transparent)', marginBottom: '16px' }} />
-            <p style={{ fontSize: '11px', color: 'rgba(255,200,0,0.5)', letterSpacing: '2px', margin: '0 0 8px' }}>DIBERIKAN KEPADA</p>
-            <p style={{ fontSize: '22px', fontWeight: '900', color: '#ffd700', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
-            <p style={{ fontSize: '13px', color: 'rgba(255,200,0,0.65)', margin: '0 0 16px' }}>Kelas {selectedProfile.kelas}{selectedProfile.jurusan}</p>
-            <div style={{ width: '100%', height: '1px', background: 'linear-gradient(90deg,transparent,#b8860b,transparent)', marginBottom: '16px' }} />
-            <p style={{ fontSize: '14px', color: 'white', fontWeight: '700', margin: '0 0 4px' }}>{badge.label} — Papan Prestasi E-JULU</p>
-            <p style={{ fontSize: '12px', color: 'rgba(255,200,0,0.6)', margin: '0 0 16px' }}>SMA NEGERI 1 LUMBANJULU</p>
-            <div style={{ background: 'rgba(255,200,0,0.08)', border: '1px solid rgba(255,200,0,0.2)', borderRadius: '12px', padding: '12px', marginBottom: '14px' }}>
-              <p style={{ fontSize: '10px', color: 'rgba(255,200,0,0.5)', letterSpacing: '2px', margin: '0 0 4px' }}>TOTAL POIN</p>
-              <p style={{ fontSize: '36px', fontWeight: '900', color: '#ffd700', margin: 0 }}>{totalPoin}</p>
+          <div style={{ width: '100%', background: 'linear-gradient(160deg,#fdfaf2,#f6ecd2 50%,#fdfaf2)', border: '1px solid #d4af37', borderRadius: '18px', marginBottom: '14px', position: 'relative', overflow: 'hidden', boxShadow: '0 12px 32px rgba(184,134,11,0.22)' }}>
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Tangerine:wght@700&display=swap');`}</style>
+
+            {/* Garis dekoratif pojok kiri-atas & kanan-bawah */}
+            <svg viewBox="0 0 130 130" style={{ position: 'absolute', top: 0, left: 0, width: '110px', height: '110px', opacity: 0.55, pointerEvents: 'none' }}>
+              <path d="M-5,38 C28,38 28,5 60,5 C92,5 92,38 125,38" stroke="#c9a227" strokeWidth="1.6" fill="none" />
+              <path d="M-5,55 C22,55 22,22 48,22 C74,22 74,55 98,55" stroke="#c9a227" strokeWidth="1" fill="none" opacity="0.6" />
+            </svg>
+            <svg viewBox="0 0 130 130" style={{ position: 'absolute', bottom: 0, right: 0, width: '110px', height: '110px', opacity: 0.55, transform: 'rotate(180deg)', pointerEvents: 'none' }}>
+              <path d="M-5,38 C28,38 28,5 60,5 C92,5 92,38 125,38" stroke="#c9a227" strokeWidth="1.6" fill="none" />
+              <path d="M-5,55 C22,55 22,22 48,22 C74,22 74,55 98,55" stroke="#c9a227" strokeWidth="1" fill="none" opacity="0.6" />
+            </svg>
+
+            {/* Meterai emas pojok kanan-bawah */}
+            <div style={{ position: 'absolute', bottom: '16px', right: '16px', width: '64px', height: '64px', borderRadius: '50%', background: 'repeating-conic-gradient(from 0deg, #d4af37 0deg 9deg, #b8943f 9deg 18deg)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.18)' }}>
+              <div style={{ width: '47px', height: '47px', borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fdf3d0, #c9a227 60%, #8a6d1f)', border: '1px solid #fff6d8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '9px', fontWeight: 800, color: '#fffbe8', letterSpacing: '0.5px', textAlign: 'center', lineHeight: 1.15 }}>E-JULU<br />★</span>
+              </div>
+            </div>
+
+            <div style={{ position: 'relative', padding: '32px 22px 30px', textAlign: 'center' }}>
+              <p style={{ fontFamily: "'Playfair Display', serif", fontSize: '9px', letterSpacing: '4px', color: '#a9822f', fontWeight: 700, margin: '0 0 8px' }}>SMA NEGERI 1 LUMBANJULU</p>
+              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '28px', fontWeight: 800, color: '#8a6d1f', letterSpacing: '3px', margin: '0 0 2px' }}>SERTIFIKAT</h2>
+              <p style={{ fontFamily: "'Playfair Display', serif", fontSize: '11px', letterSpacing: '6px', color: '#b8943f', margin: '0 0 18px', fontWeight: 600 }}>PRESTASI AKADEMIK</p>
+
+              <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fff6d8, #e6c25c 55%, #a9822f)', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', boxShadow: '0 3px 10px rgba(169,130,47,0.4), inset 0 1px 2px rgba(255,255,255,0.6)' }}>{badge.icon}</div>
+
+              <p style={{ fontSize: '11px', letterSpacing: '2px', color: '#8a7140', margin: '0 0 8px', fontWeight: 600 }}>DENGAN BANGGA DIBERIKAN KEPADA</p>
+              <p style={{ fontFamily: "'Tangerine', cursive", fontWeight: 700, fontSize: '42px', color: '#7a5c14', margin: '0 0 2px', lineHeight: 1, wordBreak: 'break-word' }}>{selectedProfile.nama}</p>
+              <div style={{ width: '150px', height: '1px', background: 'linear-gradient(90deg,transparent,#c9a227,transparent)', margin: '8px auto 16px' }} />
+
+              <p style={{ fontSize: '12.5px', color: '#4a3f2a', lineHeight: '1.8', margin: '0 auto 16px', maxWidth: '300px' }}>
+                Siswa-siswi <strong>Kelas {selectedProfile.kelas}{selectedProfile.jurusan}</strong> ini telah membuktikan dedikasi dan konsistensi belajarnya dengan menduduki <strong>{badge.label}</strong> di Papan Prestasi E-JULU, mengumpulkan <strong>{totalPoin} poin akademik</strong> melalui pembelajaran, penilaian, dan keaktifan di kelas.
+              </p>
+
+              <p style={{ fontSize: '11px', color: '#8a7140', letterSpacing: '0.5px', margin: 0 }}>
+                Lumbanjulu, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
             </div>
           </div>
         )}
