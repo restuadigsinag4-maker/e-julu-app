@@ -108,7 +108,9 @@ function App() {
   const [selectedAvatar, setSelectedAvatar] = useState('');
 
   // About
-  const [aboutData, setAboutData] = useState({ namaSekolah: 'SMA NEGERI 1 LUMBANJULU', namaKepsek: '', jabatanKepsek: 'Kepala Sekolah', tentang: '', visi: '', misi: '', fotoSekolah: '', fotoKepsek: '' });
+  const [aboutData, setAboutData] = useState({ namaSekolah: 'SMA NEGERI 1 LUMBANJULU', namaKepsek: '', jabatanKepsek: 'Kepala Sekolah', tentang: '', visi: '', misi: '', fotoSekolah: '', fotoKepsek: '', deskripsiApp: '' });
+  const [aboutTab, setAboutTab] = useState('sekolah');
+  const [uploadingFoto, setUploadingFoto] = useState('');
   const [aboutLoaded, setAboutLoaded] = useState(false);
 
   // Diskusi
@@ -926,6 +928,34 @@ function App() {
       setAdminMsg('✅ Halaman Tentang disimpan!');
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setTimeout(() => setAdminMsg(''), 3000);
+  };
+
+  // Upload foto langsung dari HP/laptop admin — gak perlu cari "link URL foto" lagi.
+  // Foto otomatis dikecilin & dikompres biar muat disimpan di Firestore.
+  const uploadFotoAbout = (field) => (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFoto(field);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxW = 600;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        setAboutData(p => ({ ...p, [field]: dataUrl }));
+        setUploadingFoto('');
+      };
+      img.onerror = () => setUploadingFoto('');
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => setUploadingFoto('');
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const loadSiswaByKelas = async (tingkat, jurusan) => {
@@ -2365,34 +2395,66 @@ function App() {
       <TopBar />
       <BackBtn to="dashboard" />
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>ℹ️ Tentang</p>
-      <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px', letterSpacing: '1px' }}>PROFIL SEKOLAH</p>
-      <div style={{ width: '100%', background: 'linear-gradient(135deg,#1e40af,#1d4ed8)', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(37,99,235,0.3)' }}>
-        {aboutData.fotoSekolah ? <img src={aboutData.fotoSekolah} alt="Sekolah" style={{ width: '100%', borderRadius: '12px', marginBottom: '16px', maxHeight: '180px', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '120px', borderRadius: '12px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', fontSize: '40px' }}>🏫</div>}
-        <img src="/logo_sekolah.png" alt="Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '50%', marginBottom: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }} />
-        <p style={{ color: 'white', fontSize: '17px', fontWeight: '900', margin: '0 0 4px' }}>{aboutData.namaSekolah || 'SMA NEGERI 1 LUMBANJULU'}</p>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', margin: '0 0 8px' }}>Kabupaten Toba · Sumatera Utara</p>
-        {aboutData.tentang && <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.tentang}</p>}
+      <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '16px', letterSpacing: '1px' }}>PILIH INFORMASI</p>
+
+      <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '18px' }}>
+        <button onClick={() => setAboutTab('sekolah')} style={{ flex: 1, padding: '12px 4px', borderRadius: '12px', border: 'none', fontSize: '13px', fontWeight: '700', cursor: 'pointer', background: aboutTab === 'sekolah' ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#f1f5f9', color: aboutTab === 'sekolah' ? 'white' : '#64748b' }}>🏫 Tentang Sekolah</button>
+        <button onClick={() => setAboutTab('aplikasi')} style={{ flex: 1, padding: '12px 4px', borderRadius: '12px', border: 'none', fontSize: '13px', fontWeight: '700', cursor: 'pointer', background: aboutTab === 'aplikasi' ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#f1f5f9', color: aboutTab === 'aplikasi' ? 'white' : '#64748b' }}>📱 Tentang Aplikasi</button>
       </div>
-      {(aboutData.visi || aboutData.misi) && (
-        <div style={{ ...S.card }}>
-          {aboutData.visi && <div style={{ marginBottom: aboutData.misi ? '14px' : 0 }}><p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>🎯 VISI</p><p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.visi}</p></div>}
-          {aboutData.misi && <div><p style={{ color: '#d97706', fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>📌 MISI</p><p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.misi}</p></div>}
-        </div>
+
+      {aboutTab === 'sekolah' && (
+        <>
+          <div style={{ width: '100%', background: 'linear-gradient(135deg,#1e40af,#1d4ed8)', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(37,99,235,0.3)' }}>
+            {aboutData.fotoSekolah ? <img src={aboutData.fotoSekolah} alt="Sekolah" style={{ width: '100%', borderRadius: '12px', marginBottom: '16px', maxHeight: '180px', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '120px', borderRadius: '12px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', fontSize: '40px' }}>🏫</div>}
+            <img src="/logo_sekolah.png" alt="Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '50%', marginBottom: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }} />
+            <p style={{ color: 'white', fontSize: '17px', fontWeight: '900', margin: '0 0 4px' }}>{aboutData.namaSekolah || 'SMA NEGERI 1 LUMBANJULU'}</p>
+            {aboutData.tentang && <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', lineHeight: '1.7', margin: '8px 0 0' }}>{aboutData.tentang}</p>}
+          </div>
+          {(aboutData.visi || aboutData.misi) && (
+            <div style={{ ...S.card }}>
+              {aboutData.visi && <div style={{ marginBottom: aboutData.misi ? '14px' : 0 }}><p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>🎯 VISI</p><p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.visi}</p></div>}
+              {aboutData.misi && <div><p style={{ color: '#d97706', fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>📌 MISI</p><p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{aboutData.misi}</p></div>}
+            </div>
+          )}
+          <div style={{ ...S.card, textAlign: 'center' }}>
+            <p style={{ color: '#d97706', fontWeight: '700', fontSize: '13px', marginBottom: '14px' }}>👤 KEPALA SEKOLAH</p>
+            {aboutData.fotoKepsek ? <img src={aboutData.fotoKepsek} alt="Kepsek" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '50%', marginBottom: '10px', border: '2px solid #fde68a' }} /> : <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', margin: '0 auto 10px' }}>👤</div>}
+            <p style={{ color: '#0f172a', fontWeight: '800', fontSize: '15px', margin: '0 0 4px' }}>{aboutData.namaKepsek || 'Belum diisi admin'}</p>
+            <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>{aboutData.jabatanKepsek || 'Kepala Sekolah'}</p>
+          </div>
+        </>
       )}
-      {(aboutData.namaKepsek || aboutData.fotoKepsek) && (
-        <div style={{ ...S.card, textAlign: 'center' }}>
-          <p style={{ color: '#d97706', fontWeight: '700', fontSize: '13px', marginBottom: '14px' }}>👤 KEPALA SEKOLAH</p>
-          {aboutData.fotoKepsek ? <img src={aboutData.fotoKepsek} alt="Kepsek" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '50%', marginBottom: '10px', border: '2px solid #fde68a' }} /> : <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', margin: '0 auto 10px' }}>👤</div>}
-          <p style={{ color: '#0f172a', fontWeight: '800', fontSize: '15px', margin: '0 0 4px' }}>{aboutData.namaKepsek}</p>
-          <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>{aboutData.jabatanKepsek || 'Kepala Sekolah'}</p>
-        </div>
+
+      {aboutTab === 'aplikasi' && (
+        <>
+          <div style={{ width: '100%', background: 'linear-gradient(135deg,#3b82f6,#6366f1)', borderRadius: '20px', padding: '28px 18px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(99,102,241,0.3)' }}>
+            <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', margin: '0 auto 14px' }}>📚</div>
+            <p style={{ color: 'white', fontSize: '24px', fontWeight: '900', letterSpacing: '2px', margin: '0 0 4px' }}>E-JULU</p>
+            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', margin: 0 }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
+          </div>
+          <div style={{ ...S.card }}>
+            <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '13px', marginBottom: '8px' }}>📖 TENTANG APLIKASI</p>
+            <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.8', margin: 0 }}>
+              {aboutData.deskripsiApp || 'E-JULU adalah aplikasi e-learning yang menghubungkan siswa dan guru dalam satu tempat — mulai dari belajar lewat Forum Belajar, mengerjakan quiz, berdiskusi, sampai chat langsung antara guru dan siswa.'}
+            </p>
+          </div>
+          <div style={{ ...S.card }}>
+            <p style={{ color: '#d97706', fontWeight: '700', fontSize: '13px', marginBottom: '12px' }}>✨ FITUR UTAMA</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[{ icon: '💬', label: 'Forum Belajar — materi, quiz & diskusi per mapel' }, { icon: '👥', label: 'Daftar Siswa & Guru — profil dan papan prestasi' }, { icon: '✉️', label: 'Pesan — chat langsung guru ↔ siswa' }].map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '20px' }}>{f.icon}</span>
+                  <span style={{ fontSize: '12.5px', color: '#475569' }}>{f.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: '8px', padding: '16px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 2px', letterSpacing: '1px' }}>DIKEMBANGKAN OLEH</p>
+            <p style={{ color: '#4f46e5', fontSize: '13px', fontWeight: '700', margin: 0 }}>Restuadi G. Sinaga, S.Kom</p>
+          </div>
+        </>
       )}
-      <div style={{ textAlign: 'center', marginTop: '8px', padding: '16px' }}>
-        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg,#3b82f6,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', margin: '0 auto 8px' }}>📚</div>
-        <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 2px', letterSpacing: '1px' }}>POWERED BY</p>
-        <p style={{ color: '#4f46e5', fontSize: '14px', fontWeight: '900', margin: '0 0 4px', letterSpacing: '2px' }}>E-JULU</p>
-        <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>Dev by Restuadi G. Sinaga, S.Kom</p>
-      </div>
     </div>
   );
 
@@ -2401,23 +2463,50 @@ function App() {
       <TopBar />
       <BackBtn to="adminSettings" fn={() => setPage('adminSettings')} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
-      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>🏫 Edit Halaman Tentang</p>
-      <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px' }}>KONTEN PROFIL SEKOLAH</p>
+      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>✏️ Edit Halaman Tentang</p>
+      <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px' }}>Perubahan langsung tampil ke semua orang setelah disimpan</p>
+
+      <div style={{ ...S.card, border: '1px solid #c7d2fe' }}>
+        <p style={{ color: '#4f46e5', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>📱 Tentang Aplikasi</p>
+        <label style={S.label}>Deskripsi Aplikasi</label>
+        <textarea style={{ ...S.input, height: '90px', resize: 'none' }} placeholder="Ceritakan singkat tentang aplikasi E-JULU..." value={aboutData.deskripsiApp} onChange={e => setAboutData(p => ({ ...p, deskripsiApp: e.target.value }))} />
+        <p style={{ color: '#94a3b8', fontSize: '11px', margin: '-6px 0 0' }}>Kosongkan untuk pakai deskripsi bawaan.</p>
+      </div>
+
       <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
         <p style={{ color: '#4f46e5', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>🏫 Info Sekolah</p>
         <label style={S.label}>Nama Sekolah</label><input style={S.input} value={aboutData.namaSekolah} onChange={e => setAboutData(p => ({ ...p, namaSekolah: e.target.value }))} />
-        <label style={S.label}>URL Foto Sekolah</label><input style={S.input} placeholder="https://..." value={aboutData.fotoSekolah} onChange={e => setAboutData(p => ({ ...p, fotoSekolah: e.target.value }))} />
+
+        <label style={S.label}>Foto Sekolah</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+          {aboutData.fotoSekolah ? <img src={aboutData.fotoSekolah} alt="Preview" style={{ width: '64px', height: '64px', borderRadius: '10px', objectFit: 'cover', border: '1px solid #e2e8f0' }} /> : <div style={{ width: '64px', height: '64px', borderRadius: '10px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>🏫</div>}
+          <label style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1.5px dashed #93c5fd', background: '#eff6ff', color: '#2563eb', fontSize: '12px', fontWeight: '700', textAlign: 'center', cursor: 'pointer' }}>
+            {uploadingFoto === 'fotoSekolah' ? '⏳ Memproses...' : '📤 Upload Foto'}
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadFotoAbout('fotoSekolah')} />
+          </label>
+        </div>
+
         <label style={S.label}>Tentang Sekolah</label><textarea style={{ ...S.input, height: '80px', resize: 'none' }} value={aboutData.tentang} onChange={e => setAboutData(p => ({ ...p, tentang: e.target.value }))} />
         <label style={S.label}>Visi</label><textarea style={{ ...S.input, height: '70px', resize: 'none' }} value={aboutData.visi} onChange={e => setAboutData(p => ({ ...p, visi: e.target.value }))} />
         <label style={S.label}>Misi</label><textarea style={{ ...S.input, height: '70px', resize: 'none' }} value={aboutData.misi} onChange={e => setAboutData(p => ({ ...p, misi: e.target.value }))} />
       </div>
+
       <div style={{ ...S.card, border: '1px solid #fde68a' }}>
         <p style={{ color: '#d97706', fontWeight: '700', marginBottom: '12px', fontSize: '14px' }}>👤 Kepala Sekolah</p>
         <label style={S.label}>Nama Kepala Sekolah</label><input style={S.input} placeholder="Nama lengkap..." value={aboutData.namaKepsek} onChange={e => setAboutData(p => ({ ...p, namaKepsek: e.target.value }))} />
         <label style={S.label}>Jabatan</label><input style={S.input} placeholder="Kepala Sekolah" value={aboutData.jabatanKepsek} onChange={e => setAboutData(p => ({ ...p, jabatanKepsek: e.target.value }))} />
-        <label style={S.label}>URL Foto</label><input style={S.input} placeholder="https://..." value={aboutData.fotoKepsek} onChange={e => setAboutData(p => ({ ...p, fotoKepsek: e.target.value }))} />
+
+        <label style={S.label}>Foto Kepala Sekolah</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {aboutData.fotoKepsek ? <img src={aboutData.fotoKepsek} alt="Preview" style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #fde68a' }} /> : <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>👤</div>}
+          <label style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1.5px dashed #fbbf24', background: '#fffbeb', color: '#b45309', fontSize: '12px', fontWeight: '700', textAlign: 'center', cursor: 'pointer' }}>
+            {uploadingFoto === 'fotoKepsek' ? '⏳ Memproses...' : '📤 Upload Foto'}
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadFotoAbout('fotoKepsek')} />
+          </label>
+        </div>
       </div>
-      <button onClick={simpanAbout} style={{ ...S.btnOrange, fontSize: '15px', padding: '14px' }}>💾 Simpan Halaman Tentang</button>
+
+      <button onClick={simpanAbout} style={{ ...S.btnOrange, fontSize: '15px', padding: '14px' }}>💾 Simpan & Perbarui Halaman Tentang</button>
     </div>
   );
 
