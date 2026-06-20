@@ -12,7 +12,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, collection,
-  getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy
+  getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy, limit
 } from 'firebase/firestore';
 
 function App() {
@@ -366,8 +366,11 @@ function App() {
         siswaNama: userData.nama, siswaKelas: `${userData.kelas}${userData.jurusan}`,
         poinPG, essayJawaban, nilaiEssay: null, modulDurasi, videoDurasi, timestamp: new Date()
       });
+      const poinPGBaru = (userData.poinPG || 0) + poinPG;
+      const poinModulBaru = hitungPoinModul();
       await updateDoc(doc(db, 'users', userData.uid), {
-        poinPG: (userData.poinPG || 0) + poinPG, poinModul: hitungPoinModul()
+        poinPG: poinPGBaru, poinModul: poinModulBaru,
+        totalPoin: poinPGBaru + (userData.poinEssay || 0) + poinModulBaru
       });
     } catch (err) { console.error('Gagal simpan hasil quiz:', err); }
   };
@@ -420,7 +423,7 @@ function App() {
         uid: cred.user.uid, role: 'siswa', status: 'pending', nisn: f.nisn, nama: f.nama,
         tglLahir: f.tglLahir, email: f.email, telpon: f.telpon, agama: f.agama, kelas: f.kelas,
         jurusan: f.jurusan, citaCita: f.citaCita, hobby: f.hobby, bio: f.bio, fotoUrl: fotoDataUrl || '',
-        poinPG: 0, poinEssay: 0, poinModul: 0, pelanggaran: 0, createdAt: new Date()
+        poinPG: 0, poinEssay: 0, poinModul: 0, totalPoin: 0, pelanggaran: 0, createdAt: new Date()
       });
       // Index minimal NISN → email supaya proses login (sebelum user ter-autentikasi)
       // tidak perlu query ke collection 'users' yang isinya data pribadi lengkap.
@@ -569,6 +572,11 @@ function App() {
     if (p.poinUpload !== undefined) updateData.poinUpload = Number(p.poinUpload);
     if (p.poinNilai !== undefined) updateData.poinNilai = Number(p.poinNilai);
     if (p.pelanggaran !== undefined) updateData.pelanggaran = Number(p.pelanggaran);
+    // totalPoin dijaga selalu sinkron — ini yang dipakai Leaderboard biar query-nya murah.
+    if (p.poinPG !== undefined || p.poinEssay !== undefined || p.poinModul !== undefined) {
+      const target = adminUsers.find(u => u.uid === uid) || selectedUser || {};
+      updateData.totalPoin = (updateData.poinPG ?? target.poinPG ?? 0) + (updateData.poinEssay ?? target.poinEssay ?? 0) + (updateData.poinModul ?? target.poinModul ?? 0);
+    }
     await updateDoc(doc(db, 'users', uid), updateData);
     await catatAktivitas('EDIT_POIN', `Edit poin ${nama}`);
     setAdminMsg('✅ Poin diperbarui!');
@@ -709,9 +717,9 @@ function App() {
   // yang sudah terdaftar SEBELUM fitur login yang lebih aman ini dipasang.
   // Aman dijalankan berkali-kali (skip yang sudah ada).
   const sinkronkanLoginIndex = async () => {
-    if (!window.confirm('Sinkronkan akun lama (login) & hitung ulang mapel semua guru dari awal?')) return;
+    if (!window.confirm('Sinkronkan akun lama (login, mapel guru, & poin leaderboard)?')) return;
     setMigrasiLoading(true);
-    let dibuat = 0, dilewati = 0, mapelDiisi = 0;
+    let dibuat = 0, dilewati = 0, mapelDiisi = 0, poinDiisi = 0;
     try {
       const snap = await getDocs(collection(db, 'users'));
       const mapelSnap = await getDocs(collection(db, 'masterMapel'));
@@ -738,9 +746,16 @@ function App() {
           await updateDoc(doc(db, 'users', d.id), { mapelList: finalList });
           mapelDiisi++;
         }
+        // Siswa lama belum punya field totalPoin — tanpa ini, Leaderboard versi
+        // hemat-baca gak akan nampilin mereka sama sekali. Hitung & isi sekarang.
+        if (u.role === 'siswa' && u.totalPoin === undefined) {
+          const total = (u.poinPG || 0) + (u.poinEssay || 0) + (u.poinModul || 0);
+          await updateDoc(doc(db, 'users', d.id), { totalPoin: total });
+          poinDiisi++;
+        }
       }
-      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} login dibuat, ${mapelDiisi} mapelList dihitung ulang, ${dilewati} login dilewati`);
-      setAdminMsg(`✅ Sinkron selesai! ${dibuat} akun login dipulihkan, ${mapelDiisi} guru di-hitung ulang mapelnya, ${dilewati} login sudah OK sebelumnya.`);
+      await catatAktivitas('SINKRON_LOGIN_INDEX', `${dibuat} login dibuat, ${mapelDiisi} mapelList dihitung ulang, ${poinDiisi} totalPoin diisi, ${dilewati} login dilewati`);
+      setAdminMsg(`✅ Sinkron selesai! ${dibuat} login dipulihkan, ${mapelDiisi} guru di-hitung ulang mapelnya, ${poinDiisi} siswa siap tampil di Leaderboard, ${dilewati} login sudah OK sebelumnya.`);
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setMigrasiLoading(false);
     setTimeout(() => setAdminMsg(''), 5000);
@@ -928,11 +943,11 @@ function App() {
   const loadLeaderboard = async () => {
     setDaftarLoading(true);
     try {
-      const q = query(collection(db, 'users'), where('role', '==', 'siswa'), where('status', '==', 'approved'));
+      // Narik LANGSUNG 50 siswa teratas dari database (bukan narik semua siswa lalu
+      // dipotong di HP) — ini yang bikin fitur ini murah & aman dipakai ratusan siswa.
+      const q = query(collection(db, 'users'), where('role', '==', 'siswa'), where('status', '==', 'approved'), orderBy('totalPoin', 'desc'), limit(50));
       const snap = await getDocs(q);
-      const list = snap.docs.map(d => d.data());
-      list.sort((a, b) => { const pA = (a.poinPG||0)+(a.poinEssay||0)+(a.poinModul||0); const pB = (b.poinPG||0)+(b.poinEssay||0)+(b.poinModul||0); return pB - pA; });
-      setLeaderboard(list.slice(0, 50));
+      setLeaderboard(snap.docs.map(d => d.data()));
     } catch (e) { console.error(e); }
     setDaftarLoading(false);
   };
@@ -1381,8 +1396,8 @@ function App() {
           <p style={{ color: '#10b981', fontWeight: '800', fontSize: '15px', marginBottom: '14px' }}>🏫 Master Data</p>
           {masterLoading && <LoadingSpinner />}
           <div style={{ ...S.card, border: '1px solid #fde68a', background: '#fffbeb' }}>
-            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Perbaiki Akun Lama & Mapel Guru</p>
-            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — (1) pulihkan akses login akun lama, dan (2) HITUNG ULANG total mapel tiap guru langsung dari kartu mapel di atas (membenarkan otomatis kalau ada yang sempat hilang/salah). Aman diklik berkali-kali, kapan saja.</p>
+            <p style={{ color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>🔄 Perbaiki Akun Lama, Mapel Guru & Leaderboard</p>
+            <p style={{ color: '#92400e', fontSize: '12px', marginBottom: '10px' }}>Sekali klik — (1) pulihkan akses login akun lama, (2) hitung ulang mapel tiap guru dari kartu mapel di atas, (3) siapkan siswa lama biar tetap muncul di Leaderboard. Aman diklik berkali-kali, kapan saja.</p>
             <button onClick={sinkronkanLoginIndex} disabled={migrasiLoading} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
               {migrasiLoading ? '⏳ Memproses...' : '🔄 Sinkronkan Sekarang'}
             </button>
