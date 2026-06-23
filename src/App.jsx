@@ -176,9 +176,8 @@ function App() {
   useEffect(() => {
     const handleBack = (e) => {
       e.preventDefault();
-      // Navigasi back berdasarkan halaman saat ini
       const backMap = {
-        dashboard: null, // jangan logout, biarkan di dashboard
+        dashboard: null,
         forum: 'dashboard', forumPilihKelas: 'forum', forumBab: 'forum',
         forumIsiBab: 'forumBab', quiz: 'forumIsiBab', guruBuatQuiz: 'forumIsiBab',
         guruKelola: 'forumIsiBab', diskusi: 'forumIsiBab',
@@ -192,16 +191,23 @@ function App() {
         menuSiswa: 'role', menuGuru: 'role',
         registerSiswa: 'menuSiswa', registerGuru: 'menuGuru',
         role: 'splash', menunggu: 'role', ditolak: 'role',
+        splash: null, // di splash, back = keluar app (biarkan browser/OS handle)
       };
       setPage(prev => {
         const backTo = backMap[prev];
-        if (backTo === null) return prev; // tetap di halaman, jangan logout
+        if (backTo === null) {
+          // Di dashboard: tetap di situ. Di splash: biarkan OS keluar dari app.
+          if (prev === 'splash') return prev; // OS akan handle exit
+          return prev;
+        }
         if (backTo === undefined) return prev;
+        // Push state baru supaya tombol back punya "sesuatu" buat dipop lagi nanti
+        window.history.pushState(null, '', window.location.href);
         return backTo;
       });
     };
     window.addEventListener('popstate', handleBack);
-    // Push state agar popstate terpicu saat back ditekan
+    // Seed awal: push 1 state agar popstate pertama terpicu
     window.history.pushState(null, '', window.location.href);
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
@@ -585,12 +591,17 @@ function App() {
   };
 
   const resetPasswordRBAC = async (email) => {
+    const actionSettings = { url: window.location.origin, handleCodeInApp: false };
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email, actionSettings);
       await catatAktivitas('RESET_PASSWORD', `Reset: ${email}`);
-      setAdminMsg('📧 Email reset terkirim ke ' + email);
-    } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
-    setTimeout(() => setAdminMsg(''), 4000);
+      setAdminMsg('📧 Email reset terkirim ke ' + email + '. Minta pengguna cek kotak masuk (termasuk folder Spam).');
+    } catch (e) {
+      if (e.code === 'auth/user-not-found') setAdminMsg('❌ Email tidak terdaftar di sistem.');
+      else if (e.code === 'auth/invalid-email') setAdminMsg('❌ Format email tidak valid.');
+      else setAdminMsg('❌ Gagal: ' + e.message);
+    }
+    setTimeout(() => setAdminMsg(''), 5000);
   };
 
   const simpanEditPoinRBAC = async (uid, nama) => {
@@ -915,11 +926,15 @@ function App() {
   };
 
   const gantiPassword = async () => {
+    const actionSettings = { url: window.location.origin, handleCodeInApp: false };
     try {
-      await sendPasswordResetEmail(auth, userData.email);
-      setPengaturanMsg('📧 Link reset dikirim!');
-    } catch (e) { setPengaturanMsg('❌ Gagal: ' + e.message); }
-    setTimeout(() => setPengaturanMsg(''), 4000);
+      await sendPasswordResetEmail(auth, userData.email, actionSettings);
+      setPengaturanMsg('📧 Link reset dikirim ke ' + userData.email + '. Cek kotak masuk Gmail (termasuk folder Spam), klik link di email, lalu login pakai password baru.');
+    } catch (e) {
+      if (e.code === 'auth/too-many-requests') setPengaturanMsg('❌ Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.');
+      else setPengaturanMsg('❌ Gagal: ' + e.message);
+    }
+    setTimeout(() => setPengaturanMsg(''), 8000);
   };
 
   // Ganti password langsung dari Pengaturan: masukin password lama buat verifikasi,
@@ -1172,6 +1187,23 @@ function App() {
       ✦ Development By Restuadi G. Sinaga, S.Kom ✦
     </div>
   );
+
+  // Mount footer sekali sebagai node DOM permanen — tampil di SEMUA halaman otomatis
+  // tanpa harus edit kode tiap halaman. Cleanup otomatis kalau komponen unmount.
+  useEffect(() => {
+    const footer = document.createElement('div');
+    footer.setAttribute('data-ejulu-footer', 'true');
+    Object.assign(footer.style, {
+      position: 'fixed', bottom: '0', left: '50%', transform: 'translateX(-50%)',
+      width: '100%', maxWidth: '430px', background: 'rgba(255,255,255,0.95)',
+      borderTop: '1px solid #e2e8f0', padding: '10px 16px', textAlign: 'center',
+      fontSize: '11px', color: '#94a3b8', fontWeight: '600', zIndex: '9999',
+      backdropFilter: 'blur(20px)', boxSizing: 'border-box', letterSpacing: '0.3px',
+    });
+    footer.textContent = '✦ Development By Restuadi G. Sinaga, S.Kom ✦';
+    document.body.appendChild(footer);
+    return () => { if (document.body.contains(footer)) document.body.removeChild(footer); };
+  }, []);
 
   const BackBtn = ({ to, fn }) => (
     <button style={S.btnBack} onClick={() => { if (fn) fn(); else setPage(to); }}>‹ Kembali</button>
