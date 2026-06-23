@@ -1314,26 +1314,64 @@ function App() {
 
   // ── Import massal siswa dari CSV ──────────────────────────────
   // Format CSV: NISN,Nama,Email,Password,Kelas,Jurusan,TglLahir,Agama,Telpon
-  const handleImportCSV = (e) => {
+  const handleImportExcel = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    if (!window.XLSX) {
+      setImportMsg('⏳ Memuat library Excel...');
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const XLSX = window.XLSX;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target.result;
-      const lines = text.split('\n').filter(l => l.trim());
-      const header = lines[0].toLowerCase();
-      if (!header.includes('nisn') || !header.includes('nama')) {
-        setImportMsg('❌ Format salah. Kolom pertama harus ada NISN dan Nama. Download template dulu.'); return;
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (data.length < 2) { setImportMsg('❌ File kosong atau tidak ada data.'); return; }
+        const headerRow = data[0].map(h => String(h).toLowerCase().trim());
+        const iNISN = headerRow.findIndex(h => h.includes('nisn'));
+        const iNIS  = headerRow.findIndex(h => h === 'nis' || h.includes('nis'));
+        const iNama = headerRow.findIndex(h => h.includes('nama'));
+        const iEmail = headerRow.findIndex(h => h.includes('email'));
+        const iPass = headerRow.findIndex(h => h.includes('pass') || h.includes('sandi'));
+        const iKelas = headerRow.findIndex(h => h.includes('kelas'));
+        const iJurusan = headerRow.findIndex(h => h.includes('jurusan'));
+        const iTgl = headerRow.findIndex(h => h.includes('tgl') || h.includes('lahir') || h.includes('tanggal'));
+        const iAgama = headerRow.findIndex(h => h.includes('agama'));
+        const iTelp = headerRow.findIndex(h => h.includes('telp') || h.includes('hp') || h.includes('phone'));
+        if (iNISN === -1 || iNama === -1) {
+          setImportMsg('❌ Kolom NISN dan Nama wajib ada. Gunakan template yang disediakan.'); return;
+        }
+        const rows = data.slice(1).map(cols => {
+          const nisn = String(cols[iNISN] || '').trim();
+          const nis  = iNIS  >= 0 ? String(cols[iNIS]  || '').trim() : '';
+          const nama = iNama  >= 0 ? String(cols[iNama] || '').trim() : '';
+          const email = iEmail >= 0 ? String(cols[iEmail] || '').trim() : '';
+          const password = iPass >= 0 ? String(cols[iPass] || '').trim() || nisn : nisn;
+          const kelas = iKelas >= 0 ? String(cols[iKelas] || '').trim() : '';
+          const jurusan = iJurusan >= 0 ? String(cols[iJurusan] || '').trim() : '';
+          const tglLahir = iTgl >= 0 ? String(cols[iTgl] || '').trim() : '';
+          const agama = iAgama >= 0 ? String(cols[iAgama] || '').trim() || 'Islam' : 'Islam';
+          const telpon = iTelp >= 0 ? String(cols[iTelp] || '').trim() || '-' : '-';
+          const valid = !!(nisn && nama && email && kelas && jurusan);
+          return { nisn, nis, nama, email, password, kelas, jurusan, tglLahir, agama, telpon, valid };
+        }).filter(r => r.nisn);
+        setImportPreview(rows);
+        const validCount = rows.filter(r => r.valid).length;
+        const invalidCount = rows.filter(r => !r.valid).length;
+        setImportMsg(`📋 ${validCount} siswa siap diimport${invalidCount > 0 ? `, ${invalidCount} baris bermasalah (ditandai merah)` : ''}. Cek preview lalu klik Mulai Import.`);
+      } catch(err) {
+        setImportMsg('❌ Gagal membaca file: ' + err.message);
       }
-      const rows = lines.slice(1).map(line => {
-        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-        return { nisn: cols[0], nama: cols[1], email: cols[2], password: cols[3] || cols[0], kelas: cols[4], jurusan: cols[5], tglLahir: cols[6] || '', agama: cols[7] || 'Islam', telpon: cols[8] || '-', valid: !!(cols[0] && cols[1] && cols[2] && cols[4] && cols[5]) };
-      }).filter(r => r.nisn);
-      setImportPreview(rows);
-      setImportMsg(`📋 ${rows.length} siswa siap diimport. Cek dulu, lalu klik "Mulai Import".`);
     };
-    reader.readAsText(file);
-    e.target.value = '';
+    reader.readAsArrayBuffer(file);
   };
 
   const mulaiImport = async () => {
@@ -1347,7 +1385,7 @@ function App() {
         const cred = await createUserWithEmailAndPassword(auth, s.email, s.password || s.nisn);
         await setDoc(doc(db, 'users', cred.user.uid), {
           uid: cred.user.uid, role: 'siswa', status: 'approved',
-          nisn: s.nisn, nama: s.nama, email: s.email, kelas: s.kelas,
+          nisn: s.nisn, nis: s.nis || '', nama: s.nama, email: s.email, kelas: s.kelas,
           jurusan: s.jurusan, tglLahir: s.tglLahir, agama: s.agama, telpon: s.telpon,
           citaCita: '', hobby: '', bio: '', fotoUrl: '', avatar: '🎓',
           poinPG: 0, poinEssay: 0, poinModul: 0, totalPoin: 0, pelanggaran: 0, createdAt: new Date()
@@ -1364,14 +1402,67 @@ function App() {
     setTimeout(() => setImportMsg(''), 8000);
   };
 
-  const downloadTemplateCSV = () => {
-    const header = 'NISN,Nama,Email,Password,Kelas,Jurusan,TglLahir,Agama,Telpon';
-    const contoh = '1234567890,Budi Santoso,budi@gmail.com,budi1234,10,A,2006-01-15,Islam,08123456789';
-    const blob = new Blob([header + '\n' + contoh], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'template_import_siswa.csv'; a.click();
-    URL.revokeObjectURL(url);
+  const downloadTemplateExcel = async () => {
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const XLSX = window.XLSX;
+    const headers = ['NISN','NIS','Nama','Email','Password','Kelas','Jurusan','Tgl Lahir','Agama','Telpon'];
+    const contoh = [
+      ['1234567890','12345','Budi Santoso','budi@gmail.com','budi1234','10','A','2006-01-15','Islam','08123456789'],
+      ['0987654321','67890','Siti Aminah','siti@gmail.com','siti1234','10','B','2007-03-22','Islam','08987654321'],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...contoh]);
+    // Lebar kolom
+    ws['!cols'] = [
+      {wch:14},{wch:10},{wch:24},{wch:28},{wch:14},{wch:7},{wch:9},{wch:13},{wch:10},{wch:16}
+    ];
+    // Style header: background biru gelap, teks putih bold
+    const headerRange = XLSX.utils.decode_range('A1:J1');
+    for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+      const cell = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!ws[cell]) continue;
+      ws[cell].s = {
+        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+        fill: { fgColor: { rgb: '1E3A8A' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: {
+          top: { style: 'thin', color: { rgb: '93C5FD' } },
+          bottom: { style: 'thin', color: { rgb: '93C5FD' } },
+          left: { style: 'thin', color: { rgb: '93C5FD' } },
+          right: { style: 'thin', color: { rgb: '93C5FD' } },
+        }
+      };
+    }
+    // Style baris data: alternating rows
+    contoh.forEach((_, rowIdx) => {
+      const r = rowIdx + 1;
+      const isEven = rowIdx % 2 === 0;
+      for (let C = 0; C < headers.length; C++) {
+        const cell = XLSX.utils.encode_cell({ r, c: C });
+        if (!ws[cell]) ws[cell] = { t: 's', v: '' };
+        ws[cell].s = {
+          font: { sz: 10, color: { rgb: '0F172A' } },
+          fill: { fgColor: { rgb: isEven ? 'EFF6FF' : 'FFFFFF' } },
+          alignment: { horizontal: C === 2 ? 'left' : 'center', vertical: 'center' },
+          border: {
+            top: { style: 'thin', color: { rgb: 'BFDBFE' } },
+            bottom: { style: 'thin', color: { rgb: 'BFDBFE' } },
+            left: { style: 'thin', color: { rgb: 'BFDBFE' } },
+            right: { style: 'thin', color: { rgb: 'BFDBFE' } },
+          }
+        };
+      }
+    });
+    ws['!rows'] = [{ hpt: 24 }, { hpt: 20 }, { hpt: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Import Siswa');
+    XLSX.writeFile(wb, 'Template_Import_Siswa_EJULU.xlsx');
   };
 
   const hitungTotalPoin = (u) => (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0);
@@ -3407,47 +3498,111 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // IMPORT MASSAL SISWA (admin only)
   // ══════════════════════════════════════════════════════════════════
-  if (page === 'importSiswa') return (
-    <div style={S.page}>
-      <TopBar />
-      <BackBtn to="adminDashboard" fn={() => goTo('adminDashboard')} />
-      <p style={{ color: '#4f46e5', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📥 Import Massal Siswa</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Upload file CSV untuk mendaftarkan banyak siswa sekaligus</p>
-      {importMsg && <div style={importMsg.startsWith('✅') ? S.successBox : S.errBox}>{importMsg}</div>}
-      <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
-        <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>📋 Format File CSV</p>
-        <p style={{ color: '#475569', fontSize: '12px', marginBottom: '10px', lineHeight: '1.7' }}>Kolom wajib: <strong>NISN, Nama, Email, Password, Kelas, Jurusan</strong>. Kolom opsional: TglLahir, Agama, Telpon. Kalau Password dikosongkan, otomatis pakai NISN sebagai password default.</p>
-        <button onClick={downloadTemplateCSV} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: '#eff6ff', color: '#2563eb', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>📄 Download Template CSV</button>
-      </div>
-      <div style={{ ...S.card, border: '2px dashed #4f46e5' }}>
-        <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>📤 Upload File CSV</p>
-        <label style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1.5px dashed #93c5fd', background: '#eff6ff', color: '#2563eb', fontSize: '13px', fontWeight: '700', textAlign: 'center', cursor: 'pointer', display: 'block' }}>
-          {importLoading ? '⏳ Sedang mengimport...' : '📂 Pilih File CSV'}
-          <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCSV} disabled={importLoading} />
-        </label>
-      </div>
-      {importPreview.length > 0 && (
-        <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
-          <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>👁️ Preview — {importPreview.filter(r => r.valid).length} valid, {importPreview.filter(r => !r.valid).length} bermasalah</p>
-          <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '12px' }}>
-            {importPreview.map((s, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: '13px', color: s.valid ? '#0f172a' : '#ef4444', fontWeight: '600' }}>{s.nama || '(nama kosong)'}</p>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>NISN: {s.nisn} · {s.kelas}{s.jurusan}</p>
-                </div>
-                <span style={{ fontSize: '16px' }}>{s.valid ? '✅' : '❌'}</span>
-              </div>
-            ))}
+  if (page === 'importSiswa') {
+    const validCount = importPreview.filter(r => r.valid).length;
+    const invalidCount = importPreview.filter(r => !r.valid).length;
+    const thStyle = { padding: '9px 10px', background: '#1e3a8a', color: 'white', fontWeight: '700', fontSize: '11px', textAlign: 'center', borderRight: '1px solid #3b5fc0', whiteSpace: 'nowrap' };
+    const tdStyle = (valid, even) => ({ padding: '7px 10px', fontSize: '11px', textAlign: 'center', background: !valid ? '#fef2f2' : even ? '#eff6ff' : 'white', color: !valid ? '#ef4444' : '#0f172a', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' });
+    return (
+      <div style={S.page}>
+        <TopBar />
+        <BackBtn to="adminDashboard" fn={() => goTo('adminDashboard')} />
+        <p style={{ color: '#4f46e5', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>📥 Import Massal Siswa</p>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Upload file Excel untuk mendaftarkan banyak siswa sekaligus</p>
+        {importMsg && <div style={importMsg.startsWith('✅') ? S.successBox : importMsg.startsWith('❌') ? S.errBox : { ...S.successBox, background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' }}>{importMsg}</div>}
+
+        {/* Kartu 1: Download Template */}
+        <div style={{ ...S.card, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f0f4ff)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#1e3a8a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📋</div>
+            <div>
+              <p style={{ color: '#1e3a8a', fontWeight: '800', fontSize: '14px', margin: 0 }}>Template Excel</p>
+              <p style={{ color: '#64748b', fontSize: '11px', margin: 0 }}>Kolom wajib: NISN, Nama, Email, Kelas, Jurusan</p>
+            </div>
           </div>
-          <button onClick={mulaiImport} disabled={importLoading} style={{ ...S.btnOrange, marginTop: 0 }}>
-            {importLoading ? '⏳ Mengimport...' : `🚀 Import ${importPreview.filter(r => r.valid).length} Siswa Sekarang`}
+          <div style={{ background: 'white', borderRadius: '10px', padding: '10px', marginBottom: '12px', border: '1px solid #bfdbfe' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px', marginBottom: '6px' }}>
+              {['NISN','NIS','Nama','Email','Password'].map(col => (
+                <div key={col} style={{ background: '#1e3a8a', color: 'white', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '700', textAlign: 'center' }}>{col}</div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+              {['Kelas','Jurusan','Tgl Lahir','Agama','Telpon'].map(col => (
+                <div key={col} style={{ background: '#eff6ff', color: '#2563eb', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '600', textAlign: 'center', border: '1px solid #bfdbfe' }}>{col}</div>
+              ))}
+            </div>
+          </div>
+          <button onClick={downloadTemplateExcel} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e3a8a,#2563eb)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            📥 Download Template Excel
           </button>
-          <p style={{ color: '#94a3b8', fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>⚠️ Proses ini tidak bisa dibatalkan. Pastikan data sudah benar.</p>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Kartu 2: Upload */}
+        <div style={{ ...S.card, border: '2px dashed #818cf8' }}>
+          <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>📤 Upload File Excel</p>
+          <label style={{ width: '100%', padding: '18px', borderRadius: '12px', border: '1.5px dashed #93c5fd', background: '#eff6ff', color: '#2563eb', fontSize: '13px', fontWeight: '700', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '28px' }}>{importLoading ? '⏳' : '📂'}</span>
+            {importLoading ? 'Sedang mengimport...' : 'Pilih File .xlsx'}
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>File Excel dari template yang sudah diisi</span>
+            <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportExcel} disabled={importLoading} />
+          </label>
+        </div>
+
+        {/* Kartu 3: Preview tabel */}
+        {importPreview.length > 0 && (
+          <div style={{ ...S.card, border: '1px solid #bbf7d0', padding: '0', overflow: 'hidden' }}>
+            {/* Header kartu */}
+            <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', borderBottom: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ color: '#15803d', fontWeight: '800', fontSize: '14px', margin: 0 }}>👁️ Preview Data</p>
+                <p style={{ color: '#64748b', fontSize: '11px', margin: '2px 0 0' }}>
+                  <span style={{ color: '#16a34a', fontWeight: '700' }}>{validCount} valid</span>
+                  {invalidCount > 0 && <span style={{ color: '#ef4444', fontWeight: '700' }}> · {invalidCount} bermasalah</span>}
+                  {' '}dari {importPreview.length} baris
+                </p>
+              </div>
+              <div style={{ background: validCount === importPreview.length ? '#16a34a' : '#f59e0b', color: 'white', borderRadius: '20px', padding: '4px 12px', fontSize: '11px', fontWeight: '700' }}>
+                {validCount === importPreview.length ? '✅ Semua OK' : '⚠️ Ada masalah'}
+              </div>
+            </div>
+            {/* Tabel */}
+            <div style={{ overflowX: 'auto', maxHeight: '280px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '600px' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                  <tr>
+                    {['No','NISN','NIS','Nama','Kelas','Jurusan','Agama','Status'].map(h => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((s, i) => (
+                    <tr key={i}>
+                      <td style={tdStyle(s.valid, i%2===0)}>{i+1}</td>
+                      <td style={tdStyle(s.valid, i%2===0)}>{s.nisn || <span style={{color:'#ef4444'}}>❌</span>}</td>
+                      <td style={tdStyle(s.valid, i%2===0)}>{s.nis || '-'}</td>
+                      <td style={{...tdStyle(s.valid, i%2===0), textAlign:'left', maxWidth:'120px', overflow:'hidden', textOverflow:'ellipsis'}}>{s.nama || <span style={{color:'#ef4444'}}>❌ kosong</span>}</td>
+                      <td style={tdStyle(s.valid, i%2===0)}>{s.kelas || <span style={{color:'#ef4444'}}>❌</span>}</td>
+                      <td style={tdStyle(s.valid, i%2===0)}>{s.jurusan || <span style={{color:'#ef4444'}}>❌</span>}</td>
+                      <td style={tdStyle(s.valid, i%2===0)}>{s.agama || '-'}</td>
+                      <td style={{...tdStyle(s.valid, i%2===0), fontWeight:'700'}}>{s.valid ? '✅' : '❌'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Footer aksi */}
+            <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+              <button onClick={mulaiImport} disabled={importLoading || validCount === 0} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
+                {importLoading ? '⏳ Mengimport...' : `🚀 Import ${validCount} Siswa Sekarang`}
+              </button>
+              <p style={{ color: '#94a3b8', fontSize: '11px', textAlign: 'center', margin: 0 }}>⚠️ Proses ini tidak bisa dibatalkan. Pastikan data sudah benar.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ══════════════════════════════════════════════════════════════════
   // #11 KALENDER AKADEMIK
