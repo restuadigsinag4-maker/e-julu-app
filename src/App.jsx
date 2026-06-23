@@ -444,7 +444,7 @@ function App() {
     const essayJawaban = quizSoalAcak.filter(s => s.tipe === 'essay').map(s => ({ soalId: s.id, soal: s.soal, jawaban: quizJawaban[s.id] || '' }));
     try {
       await addDoc(collection(db, 'hasilQuiz'), {
-        babId: selectedBab.id, mapel: selectedMapel.nama, siswaId: userData.uid,
+        babId: selectedBab.id, babJudul: selectedBab.judul || '', mapel: selectedMapel.nama, siswaId: userData.uid,
         siswaNama: userData.nama, siswaKelas: `${userData.kelas}${userData.jurusan}`,
         poinPG, essayJawaban, nilaiEssay: null, modulDurasi, videoDurasi, timestamp: new Date()
       });
@@ -2191,7 +2191,7 @@ function App() {
           )}
         </div>
         {/* #11 Kalender Akademik */}
-        <button onClick={() => { loadKalender(); setPage('kalender'); }} style={{ width: '100%', padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(124,58,237,0.3)', marginBottom: '14px' }}>
+        <button onClick={() => { loadKalender(); setKalenderTab('semua'); setPage('kalender'); }} style={{ width: '100%', padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(124,58,237,0.3)', marginBottom: '14px' }}>
           📅 Kalender Akademik
         </button>
         <button onClick={logout} style={{ width: '100%', padding: '14px', background: 'white', border: '1.5px solid #fecaca', color: '#ef4444', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: '700', boxShadow: '0 2px 8px rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
