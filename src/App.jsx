@@ -1548,9 +1548,8 @@ function App() {
     setGantiPassLoading(true);
     try {
       const user = auth.currentUser;
-      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
-      // Re-auth dengan password lama (ejulu123)
-      const defaultPass = userRole === 'guru' ? userData?.defaultPassword || 'ejulu123' : 'ejulu123';
+      // Re-auth dengan password lama (ejulu123) - pakai import top-level
+      const defaultPass = 'ejulu123';
       const cred = EmailAuthProvider.credential(user.email, defaultPass);
       await reauthenticateWithCredential(user, cred);
       await updatePassword(user, gantiPassBaru);
@@ -1558,7 +1557,7 @@ function App() {
       setUserData(prev => ({ ...prev, passwordChanged: true }));
       setGantiPassBaru(''); setGantiPassKonfirm(''); setGantiPassMsg('');
       // Langsung ke lengkapi profil
-      setLengkapForm({ jenisKelamin: userData?.jenisKelamin||'', agama: userData?.agama||'Islam', kewarganegaraan: userData?.kewarganegaraan||'WNI', email: userData?.email||'', telpon: userData?.telpon||'' });
+      setLengkapForm({ jenisKelamin: userData?.jenisKelamin||'', agama: userData?.agama||'Islam', kewarganegaraan: userData?.kewarganegaraan||'WNI', email: userData?.email||'', telpon: userData?.telpon||'', bio: userData?.bio||'', namaPanggilan: userData?.namaPanggilan||'' });
       goTo('lengkapiProfil');
     } catch (e) {
       setGantiPassMsg('❌ Gagal ganti password: ' + (e.code === 'auth/wrong-password' ? 'Autentikasi gagal, coba logout dan login ulang.' : e.message));
@@ -1757,7 +1756,7 @@ function App() {
       row.eachCell({ includeEmpty: true }, (cell, colNum) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
         cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF0F172A' } };
-        cell.alignment = { horizontal: colNum === 3 ? 'left' : 'center', vertical: 'middle' };
+        cell.alignment = { horizontal: colNum === 2 ? 'left' : 'center', vertical: 'middle' };
         cell.border = borderThin;
       });
     });
@@ -1772,7 +1771,7 @@ function App() {
         cell.border = borderThin;
       });
       // Buat 10 sel kosong per baris agar border tampil
-      for (let c = 1; c <= 10; c++) {
+      for (let c = 1; c <= 4; c++) {
         const cell = row.getCell(c);
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
         cell.border = borderThin;
@@ -3125,63 +3124,6 @@ function App() {
   // ══════════════════════════════════════════════════════════════════
   // REGISTRASI SISWA & GURU (ringkas)
   // ══════════════════════════════════════════════════════════════════
-  if (page === 'registerSiswa') return (
-    <div style={S.page}>
-      <TopBar /><BackBtn to="menuSiswa" />
-      <p style={{ color: '#d97706', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>REGISTRASI SISWA</p>
-      <p style={{ color: '#475569', fontSize: '13px', marginBottom: '20px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
-      {siswaError && <div style={S.errBox}>⚠️ {siswaError}</div>}
-      <div style={{ width: '100%' }}>
-        <label style={S.label}>NISN *</label><input style={S.input} placeholder="Nomor Induk Siswa" value={siswaForm.nisn} onChange={e => updateSiswaForm('nisn', e.target.value)} />
-        <label style={S.label}>Nama Lengkap *</label><input style={S.input} placeholder="Nama lengkap" value={siswaForm.nama} onChange={e => updateSiswaForm('nama', e.target.value)} />
-        <label style={S.label}>Tanggal Lahir *</label><input style={S.input} type="date" value={siswaForm.tglLahir} onChange={e => updateSiswaForm('tglLahir', e.target.value)} />
-        <label style={S.label}>Email *</label><input style={S.input} type="email" placeholder="email@gmail.com" value={siswaForm.email} onChange={e => updateSiswaForm('email', e.target.value)} />
-        <label style={S.label}>Nomor Telepon *</label><input style={S.input} type="tel" placeholder="08xxxxxxxxxx" value={siswaForm.telpon} onChange={e => updateSiswaForm('telpon', e.target.value)} />
-        <label style={S.label}>Agama *</label>
-        <select style={S.select} value={siswaForm.agama} onChange={e => updateSiswaForm('agama', e.target.value)}><option value="">Pilih Agama</option>{agamaList.map(a => <option key={a} value={a}>{a}</option>)}</select>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <div style={{ flex: 1 }}><label style={S.label}>Kelas *</label><select style={S.select} value={siswaForm.kelas} onChange={e => updateSiswaForm('kelas', e.target.value)}><option value="">Pilih</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div>
-          <div style={{ flex: 1 }}><label style={S.label}>Jurusan *</label><select style={S.select} value={siswaForm.jurusan} onChange={e => updateSiswaForm('jurusan', e.target.value)}><option value="">Pilih</option>{['A','B','C','D','E','F','G','H','I','J'].map(j => <option key={j} value={j}>{j}</option>)}</select></div>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <div style={{ flex: 1 }}><label style={S.label}>Password *</label><div style={S.pwWrap}><input style={{ ...S.input, paddingRight: '36px' }} type={showPassword ? 'text' : 'password'} placeholder="Min. 6" value={siswaForm.password} onChange={e => updateSiswaForm('password', e.target.value)} /><button style={S.eyeBtn} onClick={() => setShowPassword(!showPassword)}>{showPassword ? '🙈' : '👁️'}</button></div></div>
-          <div style={{ flex: 1 }}><label style={S.label}>Konfirmasi *</label><div style={S.pwWrap}><input style={{ ...S.input, paddingRight: '36px' }} type={showConfirmPassword ? 'text' : 'password'} placeholder="Ulangi" value={siswaForm.konfirmasi} onChange={e => updateSiswaForm('konfirmasi', e.target.value)} /><button style={S.eyeBtn} onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? '🙈' : '👁️'}</button></div></div>
-        </div>
-        <label style={S.label}>Cita-cita *</label><input style={S.input} placeholder="Cita-cita..." value={siswaForm.citaCita} onChange={e => updateSiswaForm('citaCita', e.target.value)} />
-        <label style={S.label}>Hobby *</label><input style={S.input} placeholder="Hobi kamu..." value={siswaForm.hobby} onChange={e => updateSiswaForm('hobby', e.target.value)} />
-        <label style={S.label}>Bio Singkat *</label><textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Tentang dirimu..." value={siswaForm.bio} onChange={e => updateSiswaForm('bio', e.target.value)} />
-        <button style={S.btnOrange} onClick={registrasiSiswa} disabled={loading}>{loading ? '⏳ Mendaftar...' : 'DAFTAR SEKARANG'}</button>
-      </div>
-    </div>
-  );
-
-  if (page === 'registerGuru') return (
-    <div style={S.page}>
-      <TopBar /><BackBtn to="menuGuru" />
-      <p style={{ color: '#d97706', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>REGISTRASI GURU</p>
-      <p style={{ color: '#475569', fontSize: '13px', marginBottom: '20px' }}>E-Learning SMA Negeri 1 Lumbanjulu</p>
-      {guruError && <div style={S.errBox}>⚠️ {guruError}</div>}
-      <div style={{ width: '100%' }}>
-        <label style={S.label}>NIP (Guru PNS)</label><input style={S.input} placeholder="Nomor Induk Pegawai" value={guruForm.nip} onChange={e => updateGuruForm('nip', e.target.value)} />
-        <label style={S.label}>NIK (Guru Honor)</label><input style={S.input} placeholder="Nomor Induk Kependudukan" value={guruForm.nik} onChange={e => updateGuruForm('nik', e.target.value)} />
-        <label style={S.label}>Nama Lengkap *</label><input style={S.input} placeholder="Nama lengkap" value={guruForm.nama} onChange={e => updateGuruForm('nama', e.target.value)} />
-        <label style={S.label}>Nama Panggilan *</label><input style={S.input} placeholder="Pak Budi / Bu Sari" value={guruForm.namaPanggilan} onChange={e => updateGuruForm('namaPanggilan', e.target.value)} />
-        <label style={S.label}>Mata Pelajaran *</label>
-        <select style={S.select} value={guruForm.mapel} onChange={e => updateGuruForm('mapel', e.target.value)}><option value="">Pilih Mapel</option>{mapelAktif.map(m => <option key={m.id} value={m.nama}>{m.nama}</option>)}</select>
-        <label style={S.label}>Jabatan *</label>
-        <select style={S.select} value={guruForm.jabatan} onChange={e => updateGuruForm('jabatan', e.target.value)}><option value="">Pilih Jabatan</option>{jabatanList.map(j => <option key={j} value={j}>{j}</option>)}</select>
-        <label style={S.label}>Email *</label><input style={S.input} type="email" placeholder="guru@sekolah.sch.id" value={guruForm.email} onChange={e => updateGuruForm('email', e.target.value)} />
-        <label style={S.label}>Nomor Telepon *</label><input style={S.input} type="tel" placeholder="08xxxxxxxxxx" value={guruForm.telpon} onChange={e => updateGuruForm('telpon', e.target.value)} />
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <div style={{ flex: 1 }}><label style={S.label}>Password *</label><div style={S.pwWrap}><input style={{ ...S.input, paddingRight: '36px' }} type={showPassword ? 'text' : 'password'} placeholder="Min. 6" value={guruForm.password} onChange={e => updateGuruForm('password', e.target.value)} /><button style={S.eyeBtn} onClick={() => setShowPassword(!showPassword)}>{showPassword ? '🙈' : '👁️'}</button></div></div>
-          <div style={{ flex: 1 }}><label style={S.label}>Konfirmasi *</label><div style={S.pwWrap}><input style={{ ...S.input, paddingRight: '36px' }} type={showConfirmPassword ? 'text' : 'password'} placeholder="Ulangi" value={guruForm.konfirmasi} onChange={e => updateGuruForm('konfirmasi', e.target.value)} /><button style={S.eyeBtn} onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? '🙈' : '👁️'}</button></div></div>
-        </div>
-        <label style={S.label}>Bio Singkat *</label><textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Tentang dirimu sebagai pendidik..." value={guruForm.bio} onChange={e => updateGuruForm('bio', e.target.value)} />
-        <button style={S.btnOrange} onClick={registrasiGuru} disabled={loading}>{loading ? '⏳ Mendaftar...' : 'DAFTAR SEKARANG'}</button>
-      </div>
-    </div>
-  );
-
 
   // ══════════════════════════════════════════════════════════════════
   // PENGATURAN — siswa edit bio/cita-cita/hobby, guru edit bio+telpon
