@@ -3280,7 +3280,7 @@ function App() {
             <p style={{ margin: 0 }}>📧 Email: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.email}</span></p>
             {userRole === 'siswa' && <p style={{ margin: 0 }}>🎓 NISN: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.nisn}</span></p>}
             {userRole === 'guru' && userData?.nip && <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.nip}</span></p>}
-            {userRole === 'guru' && userData?.nik && <p style={{ margin: 0 }}>🪪 NIK: <span style={{ color: '#0f172a', fontWeight: '600' }}>{userData?.nik}</span></p>}
+
           </div>
         </div>
 
@@ -3781,7 +3781,7 @@ function App() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {[
             { icon: '🪪', label: 'NIP', val: selectedProfile.nip || 'Guru Honorer (tidak ada NIP)' },
-            { icon: '🪪', label: 'NIK', val: selectedProfile.nik || '-' },
+
             { icon: '🕌', label: 'Agama', val: selectedProfile.agama || '-' },
             { icon: '🌏', label: 'Kewarganegaraan', val: selectedProfile.kewarganegaraan || 'WNI' },
             { icon: '📞', label: 'Telepon', val: selectedProfile.telpon && selectedProfile.telpon !== '-' ? selectedProfile.telpon : 'Belum diisi' },
