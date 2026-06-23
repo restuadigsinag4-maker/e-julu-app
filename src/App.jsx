@@ -1196,61 +1196,145 @@ function App() {
 
   // ── #10 Export nilai ke Excel (xlsx via CDN) ──────────────────────
   const exportNilaiExcel = async () => {
-    // Load SheetJS dari CDN kalau belum ada
-    if (!window.XLSX) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
+    await loadExcelJS();
+    const ExcelJS = window.ExcelJS;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'E-JULU';
+    const ws = wb.addWorksheet('Rekap Nilai', { views: [{ state: 'frozen', ySplit: 1 }] });
+    ws.columns = [
+      { header: 'Mata Pelajaran', key: 'mapel',   width: 22 },
+      { header: 'Bab',            key: 'bab',     width: 28 },
+      { header: 'Tanggal',        key: 'tgl',     width: 14 },
+      { header: 'Poin PG',        key: 'pg',      width: 11 },
+      { header: 'Nilai Essay',    key: 'essay',   width: 14 },
+      { header: 'Modul (mnt)',    key: 'modul',   width: 14 },
+      { header: 'Video (mnt)',    key: 'video',   width: 14 },
+      { header: 'Total Poin',     key: 'total',   width: 12 },
+    ];
+    const headerRow = ws.getRow(1);
+    headerRow.height = 26;
+    headerRow.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = { top:{style:'thin',color:{argb:'FF34D399'}}, left:{style:'thin',color:{argb:'FF34D399'}}, bottom:{style:'medium',color:{argb:'FF6EE7B7'}}, right:{style:'thin',color:{argb:'FF34D399'}} };
+    });
+    const border = { top:{style:'thin',color:{argb:'FFD1FAE5'}}, left:{style:'thin',color:{argb:'FFD1FAE5'}}, bottom:{style:'thin',color:{argb:'FFD1FAE5'}}, right:{style:'thin',color:{argb:'FFD1FAE5'}} };
+    rekapSiswaList.forEach((h, idx) => {
+      const total = (h.poinPG||0) + (typeof h.nilaiEssay === 'number' ? Math.round(h.nilaiEssay/5) : 0);
+      const row = ws.addRow({
+        mapel: h.mapel||'-', bab: h.babJudul||'-',
+        tgl: h.timestamp ? new Date(h.timestamp.seconds*1000).toLocaleDateString('id-ID') : '-',
+        pg: h.poinPG||0,
+        essay: h.nilaiEssay !== null && h.nilaiEssay !== undefined ? h.nilaiEssay : 'Belum dinilai',
+        modul: h.modulDurasi||0, video: h.videoDurasi||0, total,
       });
-    }
-    const XLSX = window.XLSX;
-    const rows = rekapSiswaList.map(h => ({
-      'Mata Pelajaran': h.mapel || '-',
-      'Bab': h.babJudul || '-',
-      'Tanggal': h.timestamp ? new Date(h.timestamp.seconds * 1000).toLocaleDateString('id-ID') : '-',
-      'Poin PG': h.poinPG || 0,
-      'Nilai Essay': h.nilaiEssay !== null && h.nilaiEssay !== undefined ? h.nilaiEssay : 'Belum dinilai',
-      'Durasi Modul (mnt)': h.modulDurasi || 0,
-      'Durasi Video (mnt)': h.videoDurasi || 0,
-      'Total Poin': (h.poinPG || 0) + (typeof h.nilaiEssay === 'number' ? Math.round(h.nilaiEssay / 5) : 0),
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Nilai');
-    // Atur lebar kolom otomatis
-    ws['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 12 }];
-    XLSX.writeFile(wb, `Rekap_Nilai_${userData?.nama || 'Siswa'}_${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}.xlsx`);
+      row.height = 19;
+      const bg = idx%2===0 ? 'FFF0FDF4' : 'FFFFFFFF';
+      row.eachCell({includeEmpty:true}, (cell, c) => {
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        cell.font = { size:10, name:'Calibri' };
+        cell.alignment = { horizontal: c===1||c===2 ? 'left' : 'center', vertical:'middle' };
+        cell.border = border;
+        if (c===8) cell.font = { ...cell.font, bold:true, color:{argb:'FF065F46'} };
+      });
+    });
+    // Baris total
+    ws.addRow([]);
+    const totalRow = ws.addRow({ mapel: 'TOTAL POIN', total: rekapSiswaList.reduce((s,h) => s+(h.poinPG||0)+(typeof h.nilaiEssay==='number'?Math.round(h.nilaiEssay/5):0), 0) });
+    totalRow.getCell(1).font = { bold:true, size:11 };
+    totalRow.getCell(8).font = { bold:true, size:12, color:{argb:'FF065F46'} };
+    totalRow.getCell(8).fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFD1FAE5'} };
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download=`Rekap_Nilai_${userData?.nama||'Siswa'}_${new Date().toLocaleDateString('id-ID').replace(/\//g,'-')}.xlsx`; a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Export nilai satu bab untuk guru (dari hasilSiswa)
   const exportNilaiGuruExcel = async () => {
-    if (!window.XLSX) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
+    await loadExcelJS();
+    const ExcelJS = window.ExcelJS;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'E-JULU';
+    const ws = wb.addWorksheet('Hasil Siswa', { views: [{ state: 'frozen', ySplit: 2 }] });
+
+    // Baris judul
+    ws.mergeCells('A1:H1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = `REKAP NILAI — ${(selectedMapel?.nama||'').toUpperCase()} — ${selectedBab?.judul||''} — KELAS ${selectedKelas?.tingkat}${selectedKelas?.jurusan}`;
+    titleCell.font = { bold:true, size:12, color:{argb:'FFFFFFFF'}, name:'Calibri' };
+    titleCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1E3A8A'} };
+    titleCell.alignment = { horizontal:'center', vertical:'middle' };
+    ws.getRow(1).height = 30;
+
+    ws.columns = [
+      { key:'no',    width: 6  },
+      { key:'nama',  width: 28 },
+      { key:'kelas', width: 10 },
+      { key:'pg',    width: 14 },
+      { key:'essay', width: 16 },
+      { key:'modul', width: 14 },
+      { key:'video', width: 14 },
+      { key:'tgl',   width: 14 },
+    ];
+
+    // Baris header kolom
+    const colHeaders = ['No','Nama Siswa','Kelas','Poin PG (/20)','Nilai Essay (/100)','Modul (mnt)','Video (mnt)','Tanggal'];
+    const hRow = ws.addRow(colHeaders);
+    hRow.height = 24;
+    hRow.eachCell(cell => {
+      cell.font = { bold:true, color:{argb:'FFFFFFFF'}, size:10, name:'Calibri' };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1D4ED8'} };
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+      cell.border = { top:{style:'thin',color:{argb:'FF93C5FD'}}, left:{style:'thin',color:{argb:'FF93C5FD'}}, bottom:{style:'medium',color:{argb:'FFBFDBFE'}}, right:{style:'thin',color:{argb:'FF93C5FD'}} };
+    });
+
+    const border = { top:{style:'thin',color:{argb:'FFBFDBFE'}}, left:{style:'thin',color:{argb:'FFBFDBFE'}}, bottom:{style:'thin',color:{argb:'FFBFDBFE'}}, right:{style:'thin',color:{argb:'FFBFDBFE'}} };
+    hasilSiswa.forEach((h, idx) => {
+      const belumDinilai = h.nilaiEssay === null || h.nilaiEssay === undefined;
+      const row = ws.addRow([
+        idx+1, h.siswaNama||'-', h.siswaKelas||'-',
+        h.poinPG||0,
+        belumDinilai ? 'Belum dinilai' : h.nilaiEssay,
+        h.modulDurasi||0, h.videoDurasi||0,
+        h.timestamp ? new Date(h.timestamp.seconds*1000).toLocaleDateString('id-ID') : '-',
+      ]);
+      row.height = 19;
+      const bg = idx%2===0 ? 'FFEFF6FF' : 'FFFFFFFF';
+      row.eachCell({includeEmpty:true}, (cell, c) => {
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        cell.font = { size:10, name:'Calibri', color: belumDinilai && c===5 ? {argb:'FFEF4444'} : {argb:'FF0F172A'} };
+        cell.alignment = { horizontal: c===2 ? 'left' : 'center', vertical:'middle' };
+        cell.border = border;
       });
-    }
-    const XLSX = window.XLSX;
-    const rows = hasilSiswa.map((h, i) => ({
-      'No': i + 1,
-      'Nama Siswa': h.siswaNama || '-',
-      'Kelas': h.siswaKelas || '-',
-      'Poin PG (/20)': h.poinPG || 0,
-      'Nilai Essay (/100)': h.nilaiEssay !== null && h.nilaiEssay !== undefined ? h.nilaiEssay : 'Belum dinilai',
-      'Durasi Modul (mnt)': h.modulDurasi || 0,
-      'Durasi Video (mnt)': h.videoDurasi || 0,
-      'Tanggal': h.timestamp ? new Date(h.timestamp.seconds * 1000).toLocaleDateString('id-ID') : '-',
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Hasil Siswa');
-    ws['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 14 }];
-    const namaFile = `Nilai_${selectedMapel?.nama || 'Mapel'}_${selectedBab?.judul || 'Bab'}_Kelas${selectedKelas?.tingkat}${selectedKelas?.jurusan}_${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}.xlsx`;
-    XLSX.writeFile(wb, namaFile);
+    });
+
+    // Baris total
+    ws.addRow([]);
+    const totalRow = ws.addRow(['','RATA-RATA','',
+      hasilSiswa.length ? Math.round(hasilSiswa.reduce((s,h)=>s+(h.poinPG||0),0)/hasilSiswa.length*10)/10 : 0,
+      hasilSiswa.filter(h=>typeof h.nilaiEssay==='number').length
+        ? Math.round(hasilSiswa.filter(h=>typeof h.nilaiEssay==='number').reduce((s,h)=>s+h.nilaiEssay,0)/hasilSiswa.filter(h=>typeof h.nilaiEssay==='number').length*10)/10
+        : '-',
+      '','','',
+    ]);
+    [1,2,3,4,5].forEach(c => {
+      const cell = totalRow.getCell(c);
+      cell.font = { bold:true, size:10, color:{argb:'FF1E3A8A'} };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFDBEAFE'} };
+      cell.border = border;
+    });
+
+    const namaFile = `Nilai_${selectedMapel?.nama||'Mapel'}_${selectedBab?.judul||'Bab'}_Kelas${selectedKelas?.tingkat}${selectedKelas?.jurusan}_${new Date().toLocaleDateString('id-ID').replace(/\//g,'-')}.xlsx`;
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download=namaFile; a.click();
+    URL.revokeObjectURL(url);
   };
 
   // ── #11 Kalender Akademik ─────────────────────────────────────────
@@ -1402,67 +1486,108 @@ function App() {
     setTimeout(() => setImportMsg(''), 8000);
   };
 
+  const loadExcelJS = () => new Promise((resolve, reject) => {
+    if (window.ExcelJS) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+
   const downloadTemplateExcel = async () => {
-    if (!window.XLSX) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-    const XLSX = window.XLSX;
-    const headers = ['NISN','NIS','Nama','Email','Password','Kelas','Jurusan','Tgl Lahir','Agama','Telpon'];
-    const contoh = [
-      ['1234567890','12345','Budi Santoso','budi@gmail.com','budi1234','10','A','2006-01-15','Islam','08123456789'],
-      ['0987654321','67890','Siti Aminah','siti@gmail.com','siti1234','10','B','2007-03-22','Islam','08987654321'],
+    await loadExcelJS();
+    const ExcelJS = window.ExcelJS;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'E-JULU'; wb.created = new Date();
+    const ws = wb.addWorksheet('Template Import Siswa', { views: [{ state: 'frozen', ySplit: 1 }] });
+
+    // Definisi kolom
+    ws.columns = [
+      { header: 'NISN',      key: 'nisn',     width: 16 },
+      { header: 'NIS',       key: 'nis',      width: 12 },
+      { header: 'Nama',      key: 'nama',     width: 26 },
+      { header: 'Email',     key: 'email',    width: 30 },
+      { header: 'Password',  key: 'pass',     width: 16 },
+      { header: 'Kelas',     key: 'kelas',    width: 8  },
+      { header: 'Jurusan',   key: 'jurusan',  width: 10 },
+      { header: 'Tgl Lahir', key: 'tgl',      width: 14 },
+      { header: 'Agama',     key: 'agama',    width: 12 },
+      { header: 'Telpon',    key: 'telp',     width: 18 },
     ];
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...contoh]);
-    // Lebar kolom
-    ws['!cols'] = [
-      {wch:14},{wch:10},{wch:24},{wch:28},{wch:14},{wch:7},{wch:9},{wch:13},{wch:10},{wch:16}
-    ];
-    // Style header: background biru gelap, teks putih bold
-    const headerRange = XLSX.utils.decode_range('A1:J1');
-    for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
-      const cell = XLSX.utils.encode_cell({ r: 0, c: C });
-      if (!ws[cell]) continue;
-      ws[cell].s = {
-        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-        fill: { fgColor: { rgb: '1E3A8A' } },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-        border: {
-          top: { style: 'thin', color: { rgb: '93C5FD' } },
-          bottom: { style: 'thin', color: { rgb: '93C5FD' } },
-          left: { style: 'thin', color: { rgb: '93C5FD' } },
-          right: { style: 'thin', color: { rgb: '93C5FD' } },
-        }
+
+    // Style baris header (baris 1)
+    const headerRow = ws.getRow(1);
+    headerRow.height = 28;
+    headerRow.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF3B82F6' } },
+        left: { style: 'thin', color: { argb: 'FF3B82F6' } },
+        bottom: { style: 'medium', color: { argb: 'FF93C5FD' } },
+        right: { style: 'thin', color: { argb: 'FF3B82F6' } },
       };
-    }
-    // Style baris data: alternating rows
-    contoh.forEach((_, rowIdx) => {
-      const r = rowIdx + 1;
-      const isEven = rowIdx % 2 === 0;
-      for (let C = 0; C < headers.length; C++) {
-        const cell = XLSX.utils.encode_cell({ r, c: C });
-        if (!ws[cell]) ws[cell] = { t: 's', v: '' };
-        ws[cell].s = {
-          font: { sz: 10, color: { rgb: '0F172A' } },
-          fill: { fgColor: { rgb: isEven ? 'EFF6FF' : 'FFFFFF' } },
-          alignment: { horizontal: C === 2 ? 'left' : 'center', vertical: 'center' },
-          border: {
-            top: { style: 'thin', color: { rgb: 'BFDBFE' } },
-            bottom: { style: 'thin', color: { rgb: 'BFDBFE' } },
-            left: { style: 'thin', color: { rgb: 'BFDBFE' } },
-            right: { style: 'thin', color: { rgb: 'BFDBFE' } },
-          }
-        };
-      }
     });
-    ws['!rows'] = [{ hpt: 24 }, { hpt: 20 }, { hpt: 20 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template Import Siswa');
-    XLSX.writeFile(wb, 'Template_Import_Siswa_EJULU.xlsx');
+
+    // Data contoh
+    const contoh = [
+      { nisn:'1234567890', nis:'12345', nama:'Budi Santoso',  email:'budi@gmail.com',  pass:'budi1234',  kelas:'10', jurusan:'A', tgl:'2006-01-15', agama:'Islam', telp:'08123456789' },
+      { nisn:'0987654321', nis:'67890', nama:'Siti Aminah',   email:'siti@gmail.com',  pass:'siti1234',  kelas:'10', jurusan:'B', tgl:'2007-03-22', agama:'Islam', telp:'08987654321' },
+      { nisn:'1122334455', nis:'11223', nama:'Ahmad Fauzi',   email:'ahmad@gmail.com', pass:'ahmad1234', kelas:'11', jurusan:'A', tgl:'2005-07-10', agama:'Islam', telp:'08567891234' },
+      { nisn:'5544332211', nis:'55443', nama:'Dewi Rahayu',   email:'dewi@gmail.com',  pass:'dewi1234',  kelas:'11', jurusan:'B', tgl:'2005-11-28', agama:'Kristen', telp:'08234567890' },
+      { nisn:'9988776655', nis:'99887', nama:'Rizki Pratama', email:'rizki@gmail.com', pass:'rizki1234', kelas:'12', jurusan:'A', tgl:'2004-04-05', agama:'Islam', telp:'08876543219' },
+    ];
+
+    const borderThin = {
+      top:    { style: 'thin', color: { argb: 'FFBFDBFE' } },
+      left:   { style: 'thin', color: { argb: 'FFBFDBFE' } },
+      bottom: { style: 'thin', color: { argb: 'FFBFDBFE' } },
+      right:  { style: 'thin', color: { argb: 'FFBFDBFE' } },
+    };
+
+    contoh.forEach((d, idx) => {
+      const row = ws.addRow(d);
+      row.height = 20;
+      const bgColor = idx % 2 === 0 ? 'FFEFF6FF' : 'FFFFFFFF';
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+        cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF0F172A' } };
+        cell.alignment = { horizontal: colNum === 3 ? 'left' : 'center', vertical: 'middle' };
+        cell.border = borderThin;
+      });
+    });
+
+    // Baris kosong siap isi (10 baris)
+    for (let i = 0; i < 10; i++) {
+      const row = ws.addRow({});
+      row.height = 20;
+      const bgColor = i % 2 === 0 ? 'FFEFF6FF' : 'FFFFFFFF';
+      row.eachCell({ includeEmpty: true }, cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+        cell.border = borderThin;
+      });
+      // Buat 10 sel kosong per baris agar border tampil
+      for (let c = 1; c <= 10; c++) {
+        const cell = row.getCell(c);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+        cell.border = borderThin;
+      }
+    }
+
+    // Baris keterangan di bawah
+    ws.addRow([]);
+    const noteRow = ws.addRow(['* Kolom wajib: NISN, Nama, Email, Kelas, Jurusan. Password default = NISN jika dikosongkan.']);
+    noteRow.getCell(1).font = { italic: true, color: { argb: 'FF64748B' }, size: 9 };
+    ws.mergeCells(`A${noteRow.number}:J${noteRow.number}`);
+
+    // Download
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'Template_Import_Siswa_EJULU.xlsx'; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const hitungTotalPoin = (u) => (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0);
