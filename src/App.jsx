@@ -309,19 +309,49 @@ function App() {
     style.setAttribute('data-ejulu-desktop-frame', 'true');
     style.textContent = `
       @media (min-width: 768px) {
-        body {
-          background: linear-gradient(135deg,#eef2ff 0%,#e0e7ff 45%,#ede9fe 100%);
+        html, body {
+          height: 100%;
+          margin: 0;
+          background: linear-gradient(135deg,#1e1b4b 0%,#312e81 40%,#1e3a8a 100%) fixed;
         }
-        #root, body > div {
+        body::before {
+          content: '';
+          position: fixed;
+          inset: 0;
+          background:
+            radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.25) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(37,99,235,0.2) 0%, transparent 50%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        #root {
           min-height: 100vh;
-          padding: 40px 0;
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 16px;
           box-sizing: border-box;
+          position: relative;
+          z-index: 1;
         }
-        #root > div, body > div > div {
-          box-shadow: 0 25px 70px rgba(30,41,99,0.18), 0 4px 20px rgba(30,41,99,0.08);
-          border-radius: 18px;
-          overflow: hidden;
+        #root > div {
+          width: 430px !important;
+          max-width: 430px !important;
+          min-height: 80vh;
+          max-height: 88vh;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          border-radius: 40px !important;
+          box-shadow:
+            0 0 0 10px #1a1a2e,
+            0 0 0 12px #2d2d44,
+            0 40px 80px rgba(0,0,0,0.6),
+            0 8px 32px rgba(0,0,0,0.4) !important;
+          position: relative;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
+        #root > div::-webkit-scrollbar { display: none; }
       }
     `;
     document.head.appendChild(style);
