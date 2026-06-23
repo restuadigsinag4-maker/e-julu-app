@@ -170,6 +170,20 @@ function App() {
   const [guruListForMapel, setGuruListForMapel] = useState([]);
   const [migrasiLoading, setMigrasiLoading] = useState(false);
 
+  // #9 Foto profil (Base64 di Firestore)
+  const [uploadFotoProfil, setUploadFotoProfil] = useState(false);
+  const [fotoProfilDataUrl, setFotoProfilDataUrl] = useState('');
+
+  // #11 Kalender akademik
+  const [kalenderList, setKalenderList] = useState([]);
+  const [kalenderLoading, setKalenderLoading] = useState(false);
+  const [kalenderForm, setKalenderForm] = useState({ judul: '', tanggal: '', tanggalAkhir: '', tipe: 'umum', deskripsi: '' });
+  const [kalenderMsg, setKalenderMsg] = useState('');
+  const [kalenderTab, setKalenderTab] = useState('semua');
+
+  // #12 File materi Google Drive per bab (field fileDrive di dokumen bab)
+  const [linkEditDrive, setLinkEditDrive] = useState('');
+
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
   const mapelList = [
@@ -209,7 +223,7 @@ function App() {
         daftarSiswaList: 'daftarSiswaKelas', leaderboard: 'daftarSiswa',
         profilSiswa: 'daftarSiswaList', daftarGuru: 'dashboard', profilGuru: 'daftarGuru',
         pengaturan: 'dashboard', about: 'dashboard', pesan: 'dashboard',
-        pengumuman: 'dashboard', rekapNilai: 'dashboard', importSiswa: 'adminDashboard',
+        pengumuman: 'dashboard', rekapNilai: 'dashboard', kalender: 'dashboard', importSiswa: 'adminDashboard',
         adminDashboard: 'role', adminDetailUser: 'adminDashboard',
         adminSettings: 'adminDashboard', adminEditAbout: 'adminSettings',
         loginSiswa: 'menuSiswa', loginGuru: 'menuGuru',
@@ -1114,6 +1128,139 @@ function App() {
     setRekapSiswaLoading(false);
   };
 
+  // ── #9 Upload foto profil (Base64, simpan ke Firestore) ───────────
+  const handleUploadFotoProfil = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setPengaturanMsg('❌ Ukuran foto maksimal 5MB!'); return; }
+    setUploadFotoProfil(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new window.Image();
+      img.onload = () => {
+        // Resize ke max 300px (foto profil kecil = hemat Firestore)
+        const maxW = 300;
+        const scale = Math.min(1, maxW / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        setFotoProfilDataUrl(dataUrl);
+        setUploadFotoProfil(false);
+      };
+      img.onerror = () => setUploadFotoProfil(false);
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => setUploadFotoProfil(false);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const simpanFotoProfil = async () => {
+    if (!fotoProfilDataUrl || !userData) return;
+    try {
+      await updateDoc(doc(db, 'users', userData.uid), { fotoUrl: fotoProfilDataUrl });
+      setUserData(prev => ({ ...prev, fotoUrl: fotoProfilDataUrl }));
+      setFotoProfilDataUrl('');
+      setPengaturanMsg('✅ Foto profil diperbarui!');
+    } catch (e) { setPengaturanMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setPengaturanMsg(''), 3000);
+  };
+
+  // ── #10 Export nilai ke Excel (xlsx via CDN) ──────────────────────
+  const exportNilaiExcel = async () => {
+    // Load SheetJS dari CDN kalau belum ada
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const XLSX = window.XLSX;
+    const rows = rekapSiswaList.map(h => ({
+      'Mata Pelajaran': h.mapel || '-',
+      'Bab': h.babJudul || '-',
+      'Tanggal': h.timestamp ? new Date(h.timestamp.seconds * 1000).toLocaleDateString('id-ID') : '-',
+      'Poin PG': h.poinPG || 0,
+      'Nilai Essay': h.nilaiEssay !== null && h.nilaiEssay !== undefined ? h.nilaiEssay : 'Belum dinilai',
+      'Durasi Modul (mnt)': h.modulDurasi || 0,
+      'Durasi Video (mnt)': h.videoDurasi || 0,
+      'Total Poin': (h.poinPG || 0) + (typeof h.nilaiEssay === 'number' ? Math.round(h.nilaiEssay / 5) : 0),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Nilai');
+    // Atur lebar kolom otomatis
+    ws['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 12 }];
+    XLSX.writeFile(wb, `Rekap_Nilai_${userData?.nama || 'Siswa'}_${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}.xlsx`);
+  };
+
+  // Export nilai satu bab untuk guru (dari hasilSiswa)
+  const exportNilaiGuruExcel = async () => {
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const XLSX = window.XLSX;
+    const rows = hasilSiswa.map((h, i) => ({
+      'No': i + 1,
+      'Nama Siswa': h.siswaNama || '-',
+      'Kelas': h.siswaKelas || '-',
+      'Poin PG (/20)': h.poinPG || 0,
+      'Nilai Essay (/100)': h.nilaiEssay !== null && h.nilaiEssay !== undefined ? h.nilaiEssay : 'Belum dinilai',
+      'Durasi Modul (mnt)': h.modulDurasi || 0,
+      'Durasi Video (mnt)': h.videoDurasi || 0,
+      'Tanggal': h.timestamp ? new Date(h.timestamp.seconds * 1000).toLocaleDateString('id-ID') : '-',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Hasil Siswa');
+    ws['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 14 }];
+    const namaFile = `Nilai_${selectedMapel?.nama || 'Mapel'}_${selectedBab?.judul || 'Bab'}_Kelas${selectedKelas?.tingkat}${selectedKelas?.jurusan}_${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}.xlsx`;
+    XLSX.writeFile(wb, namaFile);
+  };
+
+  // ── #11 Kalender Akademik ─────────────────────────────────────────
+  const loadKalender = async () => {
+    setKalenderLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'kalender'), orderBy('tanggal', 'asc')));
+      setKalenderList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error(e); }
+    setKalenderLoading(false);
+  };
+
+  const tambahKalender = async () => {
+    if (!kalenderForm.judul.trim() || !kalenderForm.tanggal) {
+      setKalenderMsg('❌ Judul dan tanggal wajib diisi!'); setTimeout(() => setKalenderMsg(''), 2500); return;
+    }
+    try {
+      const docRef = await addDoc(collection(db, 'kalender'), {
+        ...kalenderForm, buatOlehId: userData.uid, buatOlehNama: userData.nama,
+        buatOlehRole: userRole, createdAt: new Date()
+      });
+      await catatAktivitas('TAMBAH_KALENDER', kalenderForm.judul);
+      setKalenderList(prev => [...prev, { id: docRef.id, ...kalenderForm }].sort((a, b) => a.tanggal.localeCompare(b.tanggal)));
+      setKalenderForm({ judul: '', tanggal: '', tanggalAkhir: '', tipe: 'umum', deskripsi: '' });
+      setKalenderMsg('✅ Kegiatan ditambahkan!');
+    } catch (e) { setKalenderMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setKalenderMsg(''), 3000);
+  };
+
+  const hapusKalender = async (id, judul) => {
+    if (!window.confirm(`Hapus "${judul}"?`)) return;
+    await deleteDoc(doc(db, 'kalender', id));
+    await catatAktivitas('HAPUS_KALENDER', judul);
+    setKalenderList(prev => prev.filter(k => k.id !== id));
+  };
+
   // ── Badge pesan belum dibaca ───────────────────────────────────
   const loadPesanBadge = async () => {
     if (!userData || userRole !== 'siswa') return;
@@ -1289,6 +1436,23 @@ function App() {
     setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, [field]: linkEdit[field] } : b));
     setSelectedBab(prev => ({ ...prev, [field]: linkEdit[field] }));
     alert('Link tersimpan!');
+  };
+
+  // #12 Simpan link file Google Drive per bab
+  const simpanFileDrive = async () => {
+    if (!linkEditDrive.trim()) return;
+    await updateDoc(doc(db, 'bab', selectedBab.id), { fileDrive: linkEditDrive.trim() });
+    setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, fileDrive: linkEditDrive.trim() } : b));
+    setSelectedBab(prev => ({ ...prev, fileDrive: linkEditDrive.trim() }));
+    alert('Link file Google Drive tersimpan!');
+  };
+
+  const hapusFileDrive = async () => {
+    if (!window.confirm('Hapus link file Google Drive dari bab ini?')) return;
+    await updateDoc(doc(db, 'bab', selectedBab.id), { fileDrive: '' });
+    setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, fileDrive: '' } : b));
+    setSelectedBab(prev => ({ ...prev, fileDrive: '' }));
+    setLinkEditDrive('');
   };
 
   const tambahSoalPG = async () => {
@@ -1959,8 +2123,10 @@ function App() {
         <TopBar />
         <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', borderRadius: '20px', padding: '18px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 8px 28px rgba(37,99,235,0.35)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', border: '2.5px solid rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>
-              {userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓')}
+            <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', border: '2.5px solid rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0, overflow: 'hidden' }}>
+              {userData?.fotoUrl
+                ? <img src={userData.fotoUrl} alt={userData.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓'))}
             </div>
             <div>
               <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 3px', textTransform: 'uppercase' }}>{userRole === 'guru' ? 'Guru' : `Kelas ${userData?.kelas}${userData?.jurusan}`}</p>
@@ -2014,7 +2180,7 @@ function App() {
           ))}
         </div>
         {/* Pengumuman + Rekap Nilai */}
-        <div style={{ display: 'flex', gap: '10px', width: '100%', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', gap: '10px', width: '100%', marginBottom: '10px' }}>
           <button onClick={() => { loadPengumuman(); setPage('pengumuman'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(249,115,22,0.3)' }}>
             📢 Pengumuman
           </button>
@@ -2024,6 +2190,10 @@ function App() {
             </button>
           )}
         </div>
+        {/* #11 Kalender Akademik */}
+        <button onClick={() => { loadKalender(); setPage('kalender'); }} style={{ width: '100%', padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(124,58,237,0.3)', marginBottom: '14px' }}>
+          📅 Kalender Akademik
+        </button>
         <button onClick={logout} style={{ width: '100%', padding: '14px', background: 'white', border: '1.5px solid #fecaca', color: '#ef4444', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: '700', boxShadow: '0 2px 8px rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           🚪 Keluar / Logout
         </button>
@@ -2115,7 +2285,7 @@ function App() {
                     <button onClick={() => hapusBab(b.id)} style={{ background: '#dc2626', border: 'none', color: 'white', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer' }}>🗑️</button>
                   </div>
                 </div>
-              : <button onClick={() => { setSelectedBab(b); setLinkEdit({ modul: b.modul, modul2: b.modul2, video: b.video }); loadSoal(b.id); setPage('forumIsiBab'); }}
+              : <button onClick={() => { setSelectedBab(b); setLinkEdit({ modul: b.modul, modul2: b.modul2, video: b.video }); setLinkEditDrive(b.fileDrive || ''); loadSoal(b.id); setPage('forumIsiBab'); }}
                   style={{ width: '100%', padding: '16px 20px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#1e3a5f,#1e5799)', color: 'white', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(30,87,153,0.2)' }}>
                   <span>📖 {b.judul}</span>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2167,6 +2337,30 @@ function App() {
           {userRole === 'siswa' ? (selectedBab?.video ? <a href={selectedBab.video} target="_blank" rel="noreferrer" onClick={() => { if (!videoTimerRef.current) mulaiTimerVideo(); }} style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#dc2626,#b91c1c)' }}><span>▶️</span> Tonton Video</a> : <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada video.</p>)
           : <div><input style={S.input} placeholder="Link YouTube..." value={linkEdit.video} onChange={e => setLinkEdit(p => ({ ...p, video: e.target.value }))} /><button onClick={() => simpanLinkBab('video')} style={{ background: '#16a34a', border: 'none', color: 'white', borderRadius: '6px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>💾 Simpan</button></div>}
         </div>
+        {/* #12 File Materi Google Drive */}
+        <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
+          <p style={{ color: '#16a34a', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📁 File Materi (Google Drive)</p>
+          {userRole === 'siswa' ? (
+            selectedBab?.fileDrive
+              ? <a href={selectedBab.fileDrive} target="_blank" rel="noreferrer" style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#16a34a,#15803d)', textDecoration: 'none', display: 'flex', justifyContent: 'center' }}>
+                  <span>📂</span> Buka / Download File
+                </a>
+              : <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Belum ada file materi.</p>
+          ) : (
+            <div>
+              {selectedBab?.fileDrive && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', padding: '10px 12px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #86efac' }}>
+                  <span style={{ fontSize: '18px' }}>📄</span>
+                  <p style={{ color: '#15803d', fontSize: '12px', fontWeight: '600', margin: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedBab.fileDrive}</p>
+                  <button onClick={hapusFileDrive} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}>✕</button>
+                </div>
+              )}
+              <input style={S.input} placeholder="Link Google Drive (bagikan dulu dengan 'Siapapun yang punya link')..." value={linkEditDrive} onChange={e => setLinkEditDrive(e.target.value)} />
+              <button onClick={simpanFileDrive} style={{ background: '#16a34a', border: 'none', color: 'white', borderRadius: '8px', padding: '10px 18px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>💾 Simpan Link Drive</button>
+            </div>
+          )}
+        </div>
+
         {/* Quiz */}
         <div style={{ ...S.card, border: '1px solid #fde68a' }}>
           <p style={{ color: '#d97706', fontWeight: 'bold', marginBottom: '12px', fontSize: '15px' }}>📝 Quiz Pembelajaran</p>
@@ -2331,7 +2525,14 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="forumIsiBab" />
-      <p style={{ color: '#d97706', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>Hasil Siswa</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
+        <p style={{ color: '#d97706', fontSize: '18px', fontWeight: '900', margin: 0 }}>Hasil Siswa</p>
+        {hasilSiswa.length > 0 && (
+          <button onClick={exportNilaiGuruExcel} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            📥 Excel
+          </button>
+        )}
+      </div>
       <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '16px' }}>{selectedMapel?.nama} — {selectedBab?.judul} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}</p>
       <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '16px' }}>
         {[{ key: 'pg', label: '📝 PG' }, { key: 'essay', label: '✍️ Essay' }, { key: 'modul', label: '📖 Aktivitas' }].map(t => (
@@ -2565,6 +2766,35 @@ function App() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* #9 Foto Profil */}
+        <div style={{ ...S.card, border: '1px solid #fbcfe8' }}>
+          <p style={{ color: '#db2777', fontWeight: '700', fontSize: '14px', marginBottom: '14px' }}>📷 Foto Profil</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+            <div style={{ width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #fbcfe8', flexShrink: 0, background: '#fdf2f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {(fotoProfilDataUrl || userData?.fotoUrl)
+                ? <img src={fotoProfilDataUrl || userData.fotoUrl} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span style={{ fontSize: '32px' }}>{userData?.avatar || (userRole === 'guru' ? '👨‍🏫' : '🎓')}</span>}
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: '#475569', fontSize: '12px', margin: '0 0 8px' }}>Upload foto dari galeri HP. Foto dikompres otomatis (maks 300px).</p>
+              <label style={{ display: 'block', padding: '10px', borderRadius: '10px', border: '1.5px dashed #f9a8d4', background: '#fdf2f8', color: '#db2777', fontSize: '12px', fontWeight: '700', textAlign: 'center', cursor: 'pointer' }}>
+                {uploadFotoProfil ? '⏳ Memproses...' : '📂 Pilih Foto'}
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFotoProfil} disabled={uploadFotoProfil} />
+              </label>
+            </div>
+          </div>
+          {fotoProfilDataUrl && (
+            <button onClick={simpanFotoProfil} style={{ width: '100%', padding: '11px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#ec4899,#db2777)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
+              💾 Simpan Foto Profil
+            </button>
+          )}
+          {!fotoProfilDataUrl && userData?.fotoUrl && (
+            <button onClick={async () => { await updateDoc(doc(db, 'users', userData.uid), { fotoUrl: '' }); setUserData(prev => ({ ...prev, fotoUrl: '' })); setPengaturanMsg('🗑️ Foto dihapus.'); setTimeout(() => setPengaturanMsg(''), 2500); }} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid #fca5a5', background: 'white', color: '#ef4444', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}>
+              🗑️ Hapus Foto Saat Ini
+            </button>
+          )}
         </div>
 
         {/* Edit Profil — beda per role */}
@@ -2843,7 +3073,7 @@ function App() {
             <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); setPage('profilSiswa'); }}
               style={{ display: 'grid', gridTemplateColumns: '36px 28px 1fr 1fr 64px', padding: '10px 12px', gap: '8px', alignItems: 'center', background: i % 2 === 0 ? 'white' : '#f8faff', borderTop: '1px solid #e2e8f0', cursor: 'pointer' }}>
               <div style={{ fontSize: '12px', fontWeight: '800', color: '#4f46e5', textAlign: 'center' }}>{i+1}</div>
-              <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px' }}>{s.avatar || '🎓'}</div>
+              <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', overflow: 'hidden' }}>{s.fotoUrl ? <img src={s.fotoUrl} alt={s.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (s.avatar || '🎓')}</div>
               <p style={{ fontWeight: '700', fontSize: '13px', margin: 0, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.nama}</p>
               <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{s.nisn}</p>
               <span style={{ fontSize: '13px', fontWeight: '800', color: '#4f46e5', textAlign: 'right', display: 'block' }}>{hitungTotalPoin(s)}</span>
@@ -2897,7 +3127,9 @@ function App() {
         <TopBar />
         <BackBtn to={rank !== null ? 'leaderboard' : 'daftarSiswaList'} fn={() => { setSelectedProfile(null); setPage(rank !== null ? 'leaderboard' : 'daftarSiswaList'); }} />
         <div style={{ width: '100%', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', borderRadius: '20px', padding: '24px 18px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(37,99,235,0.3)' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px' }}>{selectedProfile.avatar || '🎓'}</div>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px', overflow: 'hidden' }}>
+            {selectedProfile.fotoUrl ? <img src={selectedProfile.fotoUrl} alt={selectedProfile.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (selectedProfile.avatar || '🎓')}
+          </div>
           <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
           <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', margin: '0 0 2px' }}>Kelas {selectedProfile.kelas}{selectedProfile.jurusan}</p>
           <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12px', margin: '0 0 16px' }}>NISN: {selectedProfile.nisn}</p>
@@ -3092,7 +3324,14 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="dashboard" />
-      <p style={{ color: '#10b981', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📊 Nilai Saya</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
+        <p style={{ color: '#10b981', fontSize: '20px', fontWeight: '900', margin: 0 }}>📊 Nilai Saya</p>
+        {rekapSiswaList.length > 0 && (
+          <button onClick={exportNilaiExcel} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            📥 Export Excel
+          </button>
+        )}
+      </div>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Rekap seluruh hasil quiz dan poin kamu</p>
       {/* Ringkasan poin */}
       <div style={{ width: '100%', background: 'linear-gradient(135deg,#10b981,#059669)', borderRadius: '16px', padding: '18px', marginBottom: '16px', boxShadow: '0 6px 20px rgba(16,185,129,0.3)' }}>
@@ -3183,6 +3422,151 @@ function App() {
       )}
     </div>
   );
+
+  // ══════════════════════════════════════════════════════════════════
+  // #11 KALENDER AKADEMIK
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'kalender') {
+    const tipeConfig = {
+      umum:    { label: 'Umum',       icon: '📅', warna: '#6366f1', bg: '#eff6ff' },
+      libur:   { label: 'Libur',      icon: '🏖️',  warna: '#f59e0b', bg: '#fffbeb' },
+      ujian:   { label: 'Ujian',      icon: '📝',  warna: '#ef4444', bg: '#fef2f2' },
+      kegiatan:{ label: 'Kegiatan',   icon: '🎉',  warna: '#10b981', bg: '#f0fdf4' },
+    };
+    const hari = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+    const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+    const formatTgl = (tgl) => {
+      if (!tgl) return '-';
+      const d = new Date(tgl + 'T00:00:00');
+      return `${hari[d.getDay()]}, ${d.getDate()} ${bulanNama[d.getMonth()]} ${d.getFullYear()}`;
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    const bolehKelola = userRole === 'admin' || userRole === 'guru';
+
+    // Filter berdasarkan tab
+    const filtered = kalenderTab === 'semua'
+      ? kalenderList
+      : kalenderTab === 'mendatang'
+        ? kalenderList.filter(k => k.tanggal >= today)
+        : kalenderList.filter(k => k.tipe === kalenderTab);
+
+    // Kalender bulan ini — mini calendar
+    const now = new Date();
+    const tahunBulan = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const hariIniTglStr = now.toISOString().slice(0,10);
+    const eventBulanIni = kalenderList.filter(k => k.tanggal && k.tanggal.startsWith(tahunBulan));
+
+    return (
+      <div style={S.page}>
+        <TopBar />
+        <BackBtn to="dashboard" />
+        <p style={{ color: '#7c3aed', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>📅 Kalender Akademik</p>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Jadwal kegiatan sekolah</p>
+
+        {kalenderMsg && <div style={kalenderMsg.startsWith('✅') ? S.successBox : S.errBox}>{kalenderMsg}</div>}
+
+        {/* Mini calendar bulan ini */}
+        <div style={{ ...S.card, border: '1px solid #ede9fe', marginBottom: '16px' }}>
+          <p style={{ color: '#7c3aed', fontWeight: '700', fontSize: '13px', margin: '0 0 10px' }}>
+            📆 {now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center' }}>
+            {['M','S','S','R','K','J','S'].map((h, i) => (
+              <div key={i} style={{ fontSize: '10px', fontWeight: '700', color: '#94a3b8', padding: '4px 0' }}>{h}</div>
+            ))}
+            {Array.from({ length: new Date(now.getFullYear(), now.getMonth(), 1).getDay() }).map((_, i) => (
+              <div key={'e' + i} />
+            ))}
+            {Array.from({ length: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() }).map((_, i) => {
+              const tgl = i + 1;
+              const tglStr = `${tahunBulan}-${String(tgl).padStart(2,'0')}`;
+              const adaEvent = eventBulanIni.some(k => k.tanggal === tglStr || (k.tanggalAkhir && tglStr >= k.tanggal && tglStr <= k.tanggalAkhir));
+              const isToday = tglStr === hariIniTglStr;
+              return (
+                <div key={tgl} style={{ padding: '5px 2px', borderRadius: '6px', background: isToday ? '#7c3aed' : adaEvent ? '#ede9fe' : 'transparent', color: isToday ? 'white' : adaEvent ? '#6d28d9' : '#0f172a', fontWeight: isToday || adaEvent ? '700' : '400', fontSize: '12px', position: 'relative' }}>
+                  {tgl}
+                  {adaEvent && !isToday && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#7c3aed', margin: '0 auto' }} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Filter tab */}
+        <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '14px', overflowX: 'auto', paddingBottom: '4px' }}>
+          {[{ key: 'semua', label: '🗓️ Semua' }, { key: 'mendatang', label: '⏩ Mendatang' }, { key: 'ujian', label: '📝 Ujian' }, { key: 'libur', label: '🏖️ Libur' }, { key: 'kegiatan', label: '🎉 Kegiatan' }].map(t => (
+            <button key={t.key} onClick={() => setKalenderTab(t.key)}
+              style={{ padding: '8px 14px', borderRadius: '20px', border: 'none', background: kalenderTab === t.key ? '#7c3aed' : '#f1f5f9', color: kalenderTab === t.key ? 'white' : '#64748b', fontWeight: kalenderTab === t.key ? '700' : '600', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Form tambah kegiatan (admin/guru) */}
+        {bolehKelola && (
+          <div style={{ ...S.card, border: '2px dashed #a78bfa', marginBottom: '16px' }}>
+            <p style={{ color: '#7c3aed', fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>➕ Tambah Kegiatan</p>
+            <label style={S.label}>Judul *</label>
+            <input style={S.input} placeholder="Contoh: UTS Semester 1, Libur Natal..." value={kalenderForm.judul} onChange={e => setKalenderForm(p => ({ ...p, judul: e.target.value }))} />
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={S.label}>Tanggal Mulai *</label>
+                <input style={S.input} type="date" value={kalenderForm.tanggal} onChange={e => setKalenderForm(p => ({ ...p, tanggal: e.target.value }))} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={S.label}>Tanggal Akhir</label>
+                <input style={S.input} type="date" value={kalenderForm.tanggalAkhir} onChange={e => setKalenderForm(p => ({ ...p, tanggalAkhir: e.target.value }))} />
+              </div>
+            </div>
+            <label style={S.label}>Tipe</label>
+            <select style={S.select} value={kalenderForm.tipe} onChange={e => setKalenderForm(p => ({ ...p, tipe: e.target.value }))}>
+              <option value="umum">📅 Umum</option>
+              <option value="ujian">📝 Ujian / Penilaian</option>
+              <option value="libur">🏖️ Libur</option>
+              <option value="kegiatan">🎉 Kegiatan Sekolah</option>
+            </select>
+            <label style={S.label}>Deskripsi (opsional)</label>
+            <textarea style={{ ...S.input, height: '70px', resize: 'none' }} placeholder="Info tambahan..." value={kalenderForm.deskripsi} onChange={e => setKalenderForm(p => ({ ...p, deskripsi: e.target.value }))} />
+            <button onClick={tambahKalender} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
+              ✅ Tambahkan ke Kalender
+            </button>
+          </div>
+        )}
+
+        {kalenderLoading && <LoadingSpinner />}
+        {!kalenderLoading && filtered.length === 0 && (
+          <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '8px' }}>📅</div>
+            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada kegiatan.</p>
+          </div>
+        )}
+        {filtered.map((k, i) => {
+          const cfg = tipeConfig[k.tipe] || tipeConfig.umum;
+          const sudahLewat = k.tanggal < today;
+          return (
+            <div key={k.id || i} style={{ ...S.card, border: `1px solid ${cfg.warna}44`, background: sudahLewat ? '#f8fafc' : 'white', opacity: sudahLewat ? 0.7 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1 }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: cfg.bg, border: `1px solid ${cfg.warna}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>{cfg.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 3px', color: sudahLewat ? '#94a3b8' : '#0f172a' }}>{k.judul}</p>
+                    <p style={{ color: cfg.warna, fontSize: '11px', fontWeight: '700', margin: '0 0 2px' }}>
+                      {formatTgl(k.tanggal)}{k.tanggalAkhir && k.tanggalAkhir !== k.tanggal ? ` — ${formatTgl(k.tanggalAkhir)}` : ''}
+                    </p>
+                    {k.deskripsi && <p style={{ color: '#64748b', fontSize: '12px', margin: '4px 0 0', lineHeight: '1.5' }}>{k.deskripsi}</p>}
+                    <span style={{ fontSize: '10px', background: cfg.bg, color: cfg.warna, padding: '2px 8px', borderRadius: '6px', fontWeight: '700', display: 'inline-block', marginTop: '6px' }}>{cfg.icon} {cfg.label}</span>
+                  </div>
+                </div>
+                {bolehKelola && (
+                  <button onClick={() => hapusKalender(k.id, k.judul)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px', padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   // fallback
   return <div style={S.page}><TopBar /><p style={{color:'#64748b'}}>Halaman tidak ditemukan</p></div>;
