@@ -210,45 +210,41 @@ function App() {
   const [mapelAktif, setMapelAktif] = useState(mapelList);
 
 
-  // ── Android Back Button Fix ──────────────────────────────────
+  // ── Android Back Button ─────────────────────────────────────
+  // Pakai pageStack (ref) sebagai riwayat navigasi sendiri.
+  // Setiap goTo() push ke stack. Back button pop dari stack.
+  // Tidak bergantung pada browser history yang cepat habis di Android.
+  const pageStack = useRef(['splash']);
+
+  const goTo = (newPage) => {
+    const stack = pageStack.current;
+    if (stack[stack.length - 1] !== newPage) stack.push(newPage);
+    window.history.pushState({ p: newPage }, '', window.location.href);
+    setPage(newPage);
+  };
+
+  const goBack = () => {
+    const stack = pageStack.current;
+    const cur = stack[stack.length - 1];
+    // Halaman exit point: jangan pop, tahan di sini
+    if (cur === 'splash' || cur === 'dashboard' || stack.length <= 1) {
+      window.history.pushState({ p: 'hold' }, '', window.location.href);
+      return;
+    }
+    stack.pop();
+    const prev = stack[stack.length - 1];
+    window.history.pushState({ p: prev }, '', window.location.href);
+    setPage(prev);
+  };
+
   useEffect(() => {
-    const handleBack = (e) => {
-      e.preventDefault();
-      const backMap = {
-        dashboard: null,
-        forum: 'dashboard', forumPilihKelas: 'forum', forumBab: 'forum',
-        forumIsiBab: 'forumBab', quiz: 'forumIsiBab', guruBuatQuiz: 'forumIsiBab',
-        guruKelola: 'forumIsiBab', diskusi: 'forumIsiBab',
-        daftarSiswa: 'dashboard', daftarSiswaKelas: 'daftarSiswa',
-        daftarSiswaList: 'daftarSiswaKelas', leaderboard: 'daftarSiswa',
-        profilSiswa: 'daftarSiswaList', daftarGuru: 'dashboard', profilGuru: 'daftarGuru',
-        pengaturan: 'dashboard', about: 'dashboard', pesan: 'dashboard',
-        pengumuman: 'dashboard', rekapNilai: 'dashboard', kalender: 'dashboard', importSiswa: 'adminDashboard',
-        adminDashboard: 'role', adminDetailUser: 'adminDashboard',
-        adminSettings: 'adminDashboard', adminEditAbout: 'adminSettings',
-        loginSiswa: 'menuSiswa', loginGuru: 'menuGuru',
-        menuSiswa: 'role', menuGuru: 'role',
-        registerSiswa: 'menuSiswa', registerGuru: 'menuGuru',
-        role: 'splash', menunggu: 'role', ditolak: 'role',
-        splash: null, // di splash, back = keluar app (biarkan browser/OS handle)
-      };
-      setPage(prev => {
-        const backTo = backMap[prev];
-        if (backTo === null) {
-          // Di dashboard: tetap di situ. Di splash: biarkan OS keluar dari app.
-          if (prev === 'splash') return prev; // OS akan handle exit
-          return prev;
-        }
-        if (backTo === undefined) return prev;
-        // Push state baru supaya tombol back punya "sesuatu" buat dipop lagi nanti
-        window.history.pushState(null, '', window.location.href);
-        return backTo;
-      });
-    };
-    window.addEventListener('popstate', handleBack);
-    // Seed awal: push 1 state agar popstate pertama terpicu
-    window.history.pushState(null, '', window.location.href);
-    return () => window.removeEventListener('popstate', handleBack);
+    const onPop = (e) => { e.preventDefault(); goBack(); };
+    window.addEventListener('popstate', onPop);
+    // Seed 3 state buffer agar Android tidak langsung exit
+    window.history.pushState({ p: 'buf1' }, '', window.location.href);
+    window.history.pushState({ p: 'buf2' }, '', window.location.href);
+    window.history.pushState({ p: 'buf3' }, '', window.location.href);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   // ── Auth listener ─────────────────────────────────────────────
@@ -262,7 +258,7 @@ function App() {
             if (data.status === 'approved') {
               setUserData(data);
               setUserRole(data.role);
-              setPage(data.role === 'admin' ? 'adminDashboard' : 'dashboard');
+              goTo(data.role === 'admin' ? 'adminDashboard' : 'dashboard');
               // Load badge pesan belum dibaca (khusus siswa)
               if (data.role === 'siswa') {
                 try {
@@ -369,7 +365,7 @@ function App() {
         const elapsed = Date.now() - (hiddenTime || 0);
         if (elapsed > 3000 && page === 'quiz') {
           clearInterval(timerRef.current);
-          setPage('loginSiswa');
+          goTo('loginSiswa');
           setQuizJawaban({});
           setQuizSoalIndex(0);
           setQuizSelesai(false);
@@ -584,7 +580,7 @@ function App() {
       const siswaData = docSnap.data();
       if (siswaData.status === 'pending') { await signOut(auth); setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
       if (siswaData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
-      setUserData(siswaData); setUserRole('siswa'); setPage('dashboard');
+      setUserData(siswaData); setUserRole('siswa'); goTo('dashboard');
     } catch (e) { setLoginError('NISN atau password salah!'); }
     setLoading(false);
   };
@@ -601,7 +597,7 @@ function App() {
       const guruData = docSnap.data();
       if (guruData.status === 'pending') { await signOut(auth); setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
       if (guruData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
-      setUserData(guruData); setUserRole('guru'); setPage('dashboard');
+      setUserData(guruData); setUserRole('guru'); goTo('dashboard');
     } catch (e) { setLoginError('NIP/NIK atau password salah!'); }
     setLoading(false);
   };
@@ -621,7 +617,7 @@ function App() {
         return;
       }
       setUserData(data); setUserRole('admin');
-      setAdminError(''); loadAdminUsers('pending'); setAdminTab('pending'); setPage('adminDashboard');
+      setAdminError(''); loadAdminUsers('pending'); setAdminTab('pending'); goTo('adminDashboard');
     } catch (e) {
       setAdminError('Email atau password admin salah!');
     }
@@ -1564,7 +1560,7 @@ function App() {
   }, []);
 
   const BackBtn = ({ to, fn }) => (
-    <button style={S.btnBack} onClick={() => { if (fn) fn(); else setPage(to); }}>‹ Kembali</button>
+    <button style={S.btnBack} onClick={() => { if (fn) fn(); else goBack(); }}>‹ Kembali</button>
   );
 
   const LoadingSpinner = () => (
@@ -1659,16 +1655,16 @@ function App() {
       <p style={{ fontSize: '13px', color: '#64748b', textAlign: 'center', marginBottom: '8px', letterSpacing: '2px', fontWeight: '700' }}>MASUK SEBAGAI</p>
       <p style={{ fontSize: '22px', fontWeight: '800', textAlign: 'center', margin: '0 0 28px', color: '#0f172a' }}>Pilih Peranmu</p>
       <div style={{ display: 'flex', gap: '14px', width: '100%', marginBottom: '14px' }}>
-        <button onClick={() => setPage('menuGuru')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '26px 16px', fontSize: '15px', fontWeight: '700' }}>
+        <button onClick={() => goTo('menuGuru')} style={{ ...S.btnBlue, color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '26px 16px', fontSize: '15px', fontWeight: '700' }}>
           <span style={{ fontSize: '32px' }}>👨‍🏫</span>
           <span>GURU</span>
         </button>
-        <button onClick={() => setPage('menuSiswa')} style={{ ...S.btnGold, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '26px 16px', fontSize: '15px', flex: 1 }}>
+        <button onClick={() => goTo('menuSiswa')} style={{ ...S.btnGold, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '26px 16px', fontSize: '15px', flex: 1 }}>
           <span style={{ fontSize: '32px' }}>🎓</span>
           <span>SISWA</span>
         </button>
       </div>
-      <button onClick={() => { setAdminEmail(''); setAdminPassword(''); setAdminError(''); setPage('loginAdmin'); }}
+      <button onClick={() => { setAdminEmail(''); setAdminPassword(''); setAdminError(''); goTo('loginAdmin'); }}
         style={{ width: '100%', padding: '13px', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: '600', fontSize: '13px', cursor: 'pointer', marginBottom: '32px' }}>
         🔐 ADMIN
       </button>
@@ -1739,12 +1735,12 @@ function App() {
         ))}
       </div>
       <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '12px' }}>
-        <button onClick={() => setPage('adminSettings')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>⚙️ Pengaturan</button>
+        <button onClick={() => goTo('adminSettings')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>⚙️ Pengaturan</button>
         <button onClick={() => { setAdminTab('mapel'); loadMapelAdmin(); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: adminTab === 'mapel' ? 'none' : '1px solid #e2e8f0', background: adminTab === 'mapel' ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'white', color: adminTab === 'mapel' ? 'white' : '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📐 Mapel</button>
-        <button onClick={() => { setImportPreview([]); setImportMsg(''); setPage('importSiswa'); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📥 Import</button>
+        <button onClick={() => { setImportPreview([]); setImportMsg(''); goTo('importSiswa'); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📥 Import</button>
       </div>
       <div style={{ width: '100%', marginBottom: '12px' }}>
-        <button onClick={() => { loadPengumuman(); setPage('pengumuman'); }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📢 Kelola Pengumuman</button>
+        <button onClick={() => { loadPengumuman(); goTo('pengumuman'); }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📢 Kelola Pengumuman</button>
       </div>
       {adminLoading && <LoadingSpinner />}
 
@@ -1784,7 +1780,7 @@ function App() {
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
-                <button onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); setPage('adminDetailUser'); }}
+                <button onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); goTo('adminDetailUser'); }}
                   style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>👁️ Detail</button>
                 <button onClick={() => resetPasswordRBAC(u.email)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#8b5cf6', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🔑 Reset</button>
                 <button onClick={() => hapusUserRBAC(u.uid, u.nama)} style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#dc2626', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>🗑️</button>
@@ -1799,7 +1795,7 @@ function App() {
           <p style={{ color: '#8b5cf6', fontWeight: 'bold', fontSize: '15px', marginBottom: '12px' }}>🏆 Edit Poin ({adminUsers.length})</p>
           {adminUsers.map((u, i) => (
             <div key={i} style={{ ...S.card, border: '1px solid #ede9fe', cursor: 'pointer' }}
-              onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); setPage('adminDetailUser'); }}>
+              onClick={() => { setSelectedUser(u); setEditPoinForm({ poinPG: u.poinPG||0, poinEssay: u.poinEssay||0, poinModul: u.poinModul||0, poinUpload: u.poinUpload||0, poinNilai: u.poinNilai||0, pelanggaran: u.pelanggaran||0 }); goTo('adminDetailUser'); }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div>
                   <p style={{ fontWeight: 'bold', margin: '0 0 2px', fontSize: '14px', color: '#0f172a' }}>{u.nama}</p>
@@ -1982,7 +1978,7 @@ function App() {
   if (page === 'adminDetailUser' && selectedUser) return (
     <div style={S.page}>
       <TopBar />
-      <BackBtn to="adminDashboard" fn={() => { setSelectedUser(null); setPage('adminDashboard'); }} />
+      <BackBtn to="adminDashboard" fn={() => { setSelectedUser(null); goTo('adminDashboard'); }} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
       <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
@@ -2045,7 +2041,7 @@ function App() {
   if (page === 'adminSettings') return (
     <div style={S.page}>
       <TopBar />
-      <BackBtn to="adminDashboard" fn={() => { setAdminTab('pending'); loadAdminUsers('pending'); setPage('adminDashboard'); }} />
+      <BackBtn to="adminDashboard" fn={() => { setAdminTab('pending'); loadAdminUsers('pending'); goTo('adminDashboard'); }} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>⚙️ Pengaturan Aplikasi</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Edit tampilan dan info aplikasi</p>
@@ -2059,7 +2055,7 @@ function App() {
       </div>
       <div style={{ ...S.card, border: '1px solid rgba(255,180,0,0.2)' }}>
         <p style={{ color: '#d97706', fontWeight: '700', marginBottom: '8px', fontSize: '14px' }}>🏫 Halaman Tentang</p>
-        <button onClick={() => { loadAbout(); setPage('adminEditAbout'); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>✏️ Edit Halaman Tentang</button>
+        <button onClick={() => { loadAbout(); goTo('adminEditAbout'); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>✏️ Edit Halaman Tentang</button>
       </div>
       <div style={{ ...S.card, border: '1px solid #fde68a' }}>
         <p style={{ color: '#d97706', fontWeight: 'bold', marginBottom: '8px' }}>🔐 Info Admin</p>
@@ -2076,8 +2072,8 @@ function App() {
       <p style={{ color: '#d97706', fontSize: '20px', fontWeight: '900', textAlign: 'center', margin: '0 0 4px' }}>AKSES SISWA</p>
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '32px' }}>SMA Negeri 1 Lumbanjulu</p>
       <img src="/logo_sekolah.png" alt="Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '32px', borderRadius: '50%', boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }} />
-      <button style={S.btnTeal} onClick={() => { setLoginError(''); setPage('loginSiswa'); }}><span style={{ fontSize: '24px' }}>👤</span><span>LOGIN SISWA</span></button>
-      <button style={S.btnGold} onClick={() => setPage('registerSiswa')}><span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR SISWA BARU</span></button>
+      <button style={S.btnTeal} onClick={() => { setLoginError(''); goTo('loginSiswa'); }}><span style={{ fontSize: '24px' }}>👤</span><span>LOGIN SISWA</span></button>
+      <button style={S.btnGold} onClick={() => goTo('registerSiswa')}><span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR SISWA BARU</span></button>
     </div>
   );
 
@@ -2088,8 +2084,8 @@ function App() {
       <p style={{ color: '#2563eb', fontSize: '20px', fontWeight: '900', textAlign: 'center', margin: '0 0 4px' }}>AKSES GURU</p>
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '32px' }}>SMA Negeri 1 Lumbanjulu</p>
       <img src="/logo_sekolah.png" alt="Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '32px', borderRadius: '50%', boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }} />
-      <button style={S.btnTeal} onClick={() => { setLoginError(''); setPage('loginGuru'); }}><span style={{ fontSize: '24px' }}>👨‍🏫</span><span>LOGIN GURU</span></button>
-      <button style={S.btnGold} onClick={() => setPage('registerGuru')}><span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR GURU BARU</span></button>
+      <button style={S.btnTeal} onClick={() => { setLoginError(''); goTo('loginGuru'); }}><span style={{ fontSize: '24px' }}>👨‍🏫</span><span>LOGIN GURU</span></button>
+      <button style={S.btnGold} onClick={() => goTo('registerGuru')}><span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR GURU BARU</span></button>
     </div>
   );
 
@@ -2164,11 +2160,11 @@ function App() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <div onClick={() => { setEditBioForm({ bio: userData?.bio||'', citaCita: userData?.citaCita||'', hobby: userData?.hobby||'' }); setSelectedAvatar(userData?.avatar||''); setPengaturanMsg(''); setPage('pengaturan'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '8px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.15)' }}>
+            <div onClick={() => { setEditBioForm({ bio: userData?.bio||'', citaCita: userData?.citaCita||'', hobby: userData?.hobby||'' }); setSelectedAvatar(userData?.avatar||''); setPengaturanMsg(''); goTo('pengaturan'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '8px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.15)' }}>
               <div style={{ fontSize: '18px' }}>⚙️</div>
               <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: '2px' }}>Setelan</div>
             </div>
-            <div onClick={() => { loadAbout(); setPage('about'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '8px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.15)' }}>
+            <div onClick={() => { loadAbout(); goTo('about'); }} style={{ textAlign: 'center', cursor: 'pointer', padding: '8px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.15)' }}>
               <div style={{ fontSize: '18px' }}>ℹ️</div>
               <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: '2px' }}>Tentang</div>
             </div>
@@ -2194,9 +2190,9 @@ function App() {
             { label: 'Pesan',         icon: '✉️', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)', glow: 'rgba(6,182,212,0.3)', to: 'pesan', badge: pesanBadge },
           ].map((m, i) => (
             <button key={i} onClick={() => {
-              if (m.to === 'daftarGuru') { loadSemuaGuru(); setPage('daftarGuru'); }
-              else if (m.to === 'pesan') { setPesanBadge(0); setPage('pesan'); }
-              else if (m.to) setPage(m.to);
+              if (m.to === 'daftarGuru') { loadSemuaGuru(); goTo('daftarGuru'); }
+              else if (m.to === 'pesan') { setPesanBadge(0); goTo('pesan'); }
+              else if (m.to) goTo(m.to);
             }}
               style={{ padding: '20px 16px 16px', borderRadius: '20px', border: 'none', background: m.grad, color: 'white', fontWeight: '700', fontSize: '15px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', boxShadow: `0 6px 20px ${m.glow}`, opacity: m.to ? 1 : 0.55, textAlign: 'left', minHeight: '110px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: '8px', right: '8px', width: '40px', height: '40px', backgroundImage: 'radial-gradient(circle,rgba(255,255,255,0.25) 1px,transparent 1px)', backgroundSize: '8px 8px', borderRadius: '8px' }} />
@@ -2211,17 +2207,17 @@ function App() {
         </div>
         {/* Pengumuman + Rekap Nilai */}
         <div style={{ display: 'flex', gap: '10px', width: '100%', marginBottom: '10px' }}>
-          <button onClick={() => { loadPengumuman(); setPage('pengumuman'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(249,115,22,0.3)' }}>
+          <button onClick={() => { loadPengumuman(); goTo('pengumuman'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(249,115,22,0.3)' }}>
             📢 Pengumuman
           </button>
           {userRole === 'siswa' && (
-            <button onClick={() => { loadRekapNilaiSiswa(); setPage('rekapNilai'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}>
+            <button onClick={() => { loadRekapNilaiSiswa(); goTo('rekapNilai'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}>
               📊 Nilai Saya
             </button>
           )}
         </div>
         {/* #11 Kalender Akademik */}
-        <button onClick={() => { loadKalender(); setKalenderTab('semua'); setPage('kalender'); }} style={{ width: '100%', padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(124,58,237,0.3)', marginBottom: '14px' }}>
+        <button onClick={() => { loadKalender(); setKalenderTab('semua'); goTo('kalender'); }} style={{ width: '100%', padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(124,58,237,0.3)', marginBottom: '14px' }}>
           📅 Kalender Akademik
         </button>
         <button onClick={logout} style={{ width: '100%', padding: '14px', background: 'white', border: '1.5px solid #fecaca', color: '#ef4444', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: '700', boxShadow: '0 2px 8px rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -2248,8 +2244,8 @@ function App() {
             <button key={m.id} onClick={() => {
               if (!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
               setSelectedMapel(m);
-              if (userRole === 'siswa') { loadBab(m.nama); setSelectedKelas({ tingkat: userData.kelas, jurusan: userData.jurusan }); setPage('forumBab'); }
-              else { setGuruPilihTingkat(null); setPage('forumPilihKelas'); }
+              if (userRole === 'siswa') { loadBab(m.nama); setSelectedKelas({ tingkat: userData.kelas, jurusan: userData.jurusan }); goTo('forumBab'); }
+              else { setGuruPilihTingkat(null); goTo('forumPilihKelas'); }
             }}
               style={{ padding: '16px 10px', borderRadius: '14px', border: 'none', background: bisaAkses ? `linear-gradient(135deg,${m.warna},${m.warna}99)` : '#f1f5f9', color: bisaAkses ? 'white' : '#94a3b8', fontWeight: 'bold', fontSize: '14px', cursor: bisaAkses ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', boxShadow: bisaAkses ? `0 4px 12px ${m.warna}44` : 'none', opacity: bisaAkses ? 1 : 0.5 }}>
               <span style={{ fontSize: '28px' }}>{m.icon}</span>
@@ -2285,7 +2281,7 @@ function App() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '8px', width: '100%' }}>
             {['A','B','C','D','E','F','G','H','I','J'].map(j => (
-              <button key={j} onClick={() => { setSelectedKelas({ tingkat: guruPilihTingkat, jurusan: j }); loadBab(selectedMapel.nama); setPage('forumBab'); }}
+              <button key={j} onClick={() => { setSelectedKelas({ tingkat: guruPilihTingkat, jurusan: j }); loadBab(selectedMapel.nama); goTo('forumBab'); }}
                 style={{ padding: '16px 8px', borderRadius: '12px', border: 'none', background: `linear-gradient(135deg,${selectedMapel?.warna},${selectedMapel?.warna}99)`, color: 'white', fontWeight: '900', fontSize: '18px', cursor: 'pointer' }}>
                 {guruPilihTingkat}{j}
               </button>
@@ -2315,7 +2311,7 @@ function App() {
                     <button onClick={() => hapusBab(b.id)} style={{ background: '#dc2626', border: 'none', color: 'white', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer' }}>🗑️</button>
                   </div>
                 </div>
-              : <button onClick={() => { setSelectedBab(b); setLinkEdit({ modul: b.modul, modul2: b.modul2, video: b.video }); setLinkEditDrive(b.fileDrive || ''); loadSoal(b.id); setPage('forumIsiBab'); }}
+              : <button onClick={() => { setSelectedBab(b); setLinkEdit({ modul: b.modul, modul2: b.modul2, video: b.video }); setLinkEditDrive(b.fileDrive || ''); loadSoal(b.id); goTo('forumIsiBab'); }}
                   style={{ width: '100%', padding: '16px 20px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#1e3a5f,#1e5799)', color: 'white', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(30,87,153,0.2)' }}>
                   <span>📖 {b.judul}</span>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2340,7 +2336,7 @@ function App() {
   if (page === 'forumIsiBab') return (
     <div style={S.page}>
       <TopBar />
-      <BackBtn to="forumBab" fn={() => { stopTimerModul(); stopTimerVideo(); setPage('forumBab'); }} />
+      <BackBtn to="forumBab" fn={() => { stopTimerModul(); stopTimerVideo(); goTo('forumBab'); }} />
       <p style={{ color: '#d97706', fontSize: '18px', fontWeight: '900', marginBottom: '4px' }}>{selectedBab?.judul}</p>
       <p style={{ color: '#4f46e5', fontSize: '13px', fontWeight: 'bold', marginBottom: '2px' }}>{selectedMapel?.nama} — Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}</p>
       {userRole === 'siswa' && (
@@ -2401,19 +2397,19 @@ function App() {
                   <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '13px', margin: '0 0 4px' }}>✅ Sudah Pernah Dikerjakan</p>
                   <p style={{ color: '#475569', fontSize: '12px', margin: 0 }}>Poin PG: {quizHasilLama.poinPG}/20 · Essay: {quizHasilLama.nilaiEssay !== null && quizHasilLama.nilaiEssay !== undefined ? quizHasilLama.nilaiEssay + '/100' : 'Menunggu penilaian'}</p>
                 </div>
-                <button onClick={() => { setQuizSudahPernah(false); setQuizHasilLama(null); hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); setPage('quiz'); }} style={{ ...S.btnOrange, marginTop: 0, background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>🔄 Kerjakan Ulang</button>
+                <button onClick={() => { setQuizSudahPernah(false); setQuizHasilLama(null); hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); goTo('quiz'); }} style={{ ...S.btnOrange, marginTop: 0, background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>🔄 Kerjakan Ulang</button>
               </div>
             ) : (
-              <button onClick={async () => { const sdh = await cekSudahQuiz(selectedBab.id); if (!sdh) { hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); setPage('quiz'); } }} style={{ ...S.btnOrange, marginTop: 0 }}>🚀 Mulai Quiz</button>
+              <button onClick={async () => { const sdh = await cekSudahQuiz(selectedBab.id); if (!sdh) { hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); goTo('quiz'); } }} style={{ ...S.btnOrange, marginTop: 0 }}>🚀 Mulai Quiz</button>
             )
           ) : <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada soal.</p>)
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}><button onClick={() => setPage('guruBuatQuiz')} style={{ background: '#8b5cf6', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>✏️ Buat / Edit Soal</button><button onClick={() => { loadHasilSiswa(selectedBab.id, `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`); setPage('guruKelola'); }} style={{ background: '#1e3a8a', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>📊 Lihat Hasil Siswa</button></div>}
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}><button onClick={() => goTo('guruBuatQuiz')} style={{ background: '#8b5cf6', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>✏️ Buat / Edit Soal</button><button onClick={() => { loadHasilSiswa(selectedBab.id, `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`); goTo('guruKelola'); }} style={{ background: '#1e3a8a', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>📊 Lihat Hasil Siswa</button></div>}
         </div>
         {/* Diskusi */}
         <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
           <p style={{ color: '#4f46e5', fontWeight: '700', marginBottom: '10px', fontSize: '15px' }}>💬 Diskusi Online</p>
           <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px' }}>Forum tanya jawab bab ini untuk kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}</p>
-          <button onClick={() => { loadDiskusi(selectedBab.id, `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`); setPage('diskusi'); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#4f46e5,#4338ca)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <button onClick={() => { loadDiskusi(selectedBab.id, `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`); goTo('diskusi'); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#4f46e5,#4338ca)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
             <span>💬</span> Buka Forum Diskusi
           </button>
         </div>
@@ -2439,7 +2435,7 @@ function App() {
             <p style={{ color: '#475569', fontSize: '14px', margin: '4px 0' }}>✍️ Essay: <strong style={{ color: '#d97706' }}>Menunggu penilaian guru</strong></p>
             <p style={{ color: '#475569', fontSize: '14px', margin: '4px 0' }}>📖 Modul+Video: <strong style={{ color: '#0f172a' }}>{hitungPoinModul()}/50 pts</strong></p>
           </div>
-          <button onClick={() => setPage('forumIsiBab')} style={S.btnOrange}>← Kembali ke Bab</button>
+          <button onClick={() => goTo('forumIsiBab')} style={S.btnOrange}>← Kembali ke Bab</button>
         </div>
       );
     }
@@ -2972,7 +2968,7 @@ function App() {
   if (page === 'adminEditAbout') return (
     <div style={S.page}>
       <TopBar />
-      <BackBtn to="adminSettings" fn={() => setPage('adminSettings')} />
+      <BackBtn to="adminSettings" fn={() => goTo('adminSettings')} />
       {adminMsg && <div style={S.successBox}>{adminMsg}</div>}
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>✏️ Edit Halaman Tentang</p>
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '20px' }}>Perubahan langsung tampil ke semua orang setelah disimpan</p>
@@ -3033,7 +3029,7 @@ function App() {
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '24px' }}>PILIH KELAS ATAU LIHAT PRESTASI</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
         {[{ tingkat: '10', color: '#2563eb', grad: 'linear-gradient(135deg,#3b82f6,#2563eb)' }, { tingkat: '11', color: '#0ea5e9', grad: 'linear-gradient(135deg,#0ea5e9,#0284c7)' }, { tingkat: '12', color: '#06b6d4', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)' }].map(k => (
-          <button key={k.tingkat} onClick={() => { setDaftarSiswaTingkat(k.tingkat); setDaftarSiswaJurusan(null); setPage('daftarSiswaKelas'); }}
+          <button key={k.tingkat} onClick={() => { setDaftarSiswaTingkat(k.tingkat); setDaftarSiswaJurusan(null); goTo('daftarSiswaKelas'); }}
             style={{ width: '100%', padding: '20px 22px', borderRadius: '18px', border: 'none', background: k.grad, color: 'white', fontWeight: '800', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: `0 6px 20px ${k.color}44` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <span style={{ fontSize: '28px' }}>🎓</span>
@@ -3045,7 +3041,7 @@ function App() {
             <span style={{ fontSize: '22px' }}>›</span>
           </button>
         ))}
-        <button onClick={() => { loadLeaderboard(); setPage('leaderboard'); }}
+        <button onClick={() => { loadLeaderboard(); goTo('leaderboard'); }}
           style={{ width: '100%', padding: '20px 22px', borderRadius: '18px', border: 'none', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: '800', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 6px 20px rgba(245,158,11,0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <span style={{ fontSize: '28px' }}>🏆</span>
@@ -3068,7 +3064,7 @@ function App() {
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>PILIH JURUSAN</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px', width: '100%' }}>
         {['A','B','C','D','E','F','G','H','I','J'].map(j => (
-          <button key={j} onClick={() => { setDaftarSiswaJurusan(j); loadSiswaByKelas(daftarSiswaTingkat, j); setPage('daftarSiswaList'); }}
+          <button key={j} onClick={() => { setDaftarSiswaJurusan(j); loadSiswaByKelas(daftarSiswaTingkat, j); goTo('daftarSiswaList'); }}
             style={{ padding: '18px 8px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', color: 'white', fontWeight: '900', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(37,99,235,0.2)' }}>
             {daftarSiswaTingkat}{j}
           </button>
@@ -3100,7 +3096,7 @@ function App() {
           </div>
           {filtered.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Tidak ada hasil untuk "{searchSiswa}"</div>}
           {filtered.map((s, i) => (
-            <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); setPage('profilSiswa'); }}
+            <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); goTo('profilSiswa'); }}
               style={{ display: 'grid', gridTemplateColumns: '36px 28px 1fr 1fr 64px', padding: '10px 12px', gap: '8px', alignItems: 'center', background: i % 2 === 0 ? 'white' : '#f8faff', borderTop: '1px solid #e2e8f0', cursor: 'pointer' }}>
               <div style={{ fontSize: '12px', fontWeight: '800', color: '#4f46e5', textAlign: 'center' }}>{i+1}</div>
               <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', overflow: 'hidden' }}>{s.fotoUrl ? <img src={s.fotoUrl} alt={s.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (s.avatar || '🎓')}</div>
@@ -3128,7 +3124,7 @@ function App() {
         const badge = getRankBadge(rank);
         const totalPoin = hitungTotalPoin(s);
         return (
-          <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank }); setPage('profilSiswa'); }}
+          <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank }); goTo('profilSiswa'); }}
             style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', marginBottom: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', background: rank <= 3 ? 'white' : '#f8faff', border: `1px solid ${rank <= 3 ? badge.color+'44' : '#e2e8f0'}`, boxShadow: rank <= 3 ? `0 4px 16px ${badge.color}22` : '0 1px 4px rgba(0,0,0,0.04)' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: rank <= 3 ? `${badge.color}22` : '#f1f5f9', border: `2px solid ${badge.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ fontSize: rank <= 3 ? '22px' : '14px', fontWeight: '900', color: badge.color }}>{rank <= 3 ? badge.icon : `#${rank}`}</span>
@@ -3237,7 +3233,7 @@ function App() {
       {daftarLoading && <LoadingSpinner />}
       {!daftarLoading && daftarGuruList.length === 0 && <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}><p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Belum ada guru terdaftar.</p></div>}
       {(searchGuru.trim() ? daftarGuruList.filter(g => g.nama?.toLowerCase().includes(searchGuru.toLowerCase()) || g.mapel?.toLowerCase().includes(searchGuru.toLowerCase()) || g.namaPanggilan?.toLowerCase().includes(searchGuru.toLowerCase())) : daftarGuruList).map((g, i) => (
-        <div key={i} onClick={() => { setSelectedProfile({ ...g, type: 'guru' }); setPage('profilGuru'); }}
+        <div key={i} onClick={() => { setSelectedProfile({ ...g, type: 'guru' }); goTo('profilGuru'); }}
           style={{ ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: g.fotoUrl ? 'none' : 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, boxShadow: '0 4px 12px rgba(220,38,38,0.2)', overflow: 'hidden' }}>
             {g.fotoUrl ? <img src={g.fotoUrl} alt={g.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (g.avatar || '👨‍🏫')}
@@ -3256,7 +3252,7 @@ function App() {
   if (page === 'profilGuru' && selectedProfile) return (
     <div style={S.page}>
       <TopBar />
-      <BackBtn to="daftarGuru" fn={() => { setSelectedProfile(null); setPage('daftarGuru'); }} />
+      <BackBtn to="daftarGuru" fn={() => { setSelectedProfile(null); goTo('daftarGuru'); }} />
       <div style={{ width: '100%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', borderRadius: '20px', padding: '28px 20px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(220,38,38,0.3)' }}>
         <div style={{ width: '84px', height: '84px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px' }}>{selectedProfile.avatar || '👨‍🏫'}</div>
         <p style={{ color: 'white', fontSize: '21px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
@@ -3414,7 +3410,7 @@ function App() {
   if (page === 'importSiswa') return (
     <div style={S.page}>
       <TopBar />
-      <BackBtn to="adminDashboard" fn={() => setPage('adminDashboard')} />
+      <BackBtn to="adminDashboard" fn={() => goTo('adminDashboard')} />
       <p style={{ color: '#4f46e5', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📥 Import Massal Siswa</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Upload file CSV untuk mendaftarkan banyak siswa sekaligus</p>
       {importMsg && <div style={importMsg.startsWith('✅') ? S.successBox : S.errBox}>{importMsg}</div>}
@@ -3732,7 +3728,7 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
       return (
         <div style={S.page}>
           <TopBar />
-          <BackBtn to="dashboard" fn={() => setPage('dashboard')} />
+          <BackBtn to="dashboard" fn={() => goTo('dashboard')} />
           <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Kirim Pesan</p>
           <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih siswa untuk dikirim pesan</p>
           {loading && <LoadingSpinner />}
@@ -3801,7 +3797,7 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
     return (
       <div style={S.page}>
         <TopBar />
-        <BackBtn to="dashboard" fn={() => setPage('dashboard')} />
+        <BackBtn to="dashboard" fn={() => goTo('dashboard')} />
         <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Pesan</p>
         <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih guru untuk mulai atau lanjut chat</p>
         {loading && <LoadingSpinner />}
