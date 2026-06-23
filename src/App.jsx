@@ -130,6 +130,30 @@ function App() {
   const [daftarSiswaTingkat, setDaftarSiswaTingkat] = useState(null);
   const [daftarSiswaJurusan, setDaftarSiswaJurusan] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [searchSiswa, setSearchSiswa] = useState('');
+  const [searchGuru, setSearchGuru] = useState('');
+
+  // Pengumuman
+  const [pengumumanList, setPengumumanList] = useState([]);
+  const [pengumumanForm, setPengumumanForm] = useState({ judul: '', isi: '', target: 'semua' });
+  const [pengumumanLoading, setPengumumanLoading] = useState(false);
+  const [pengumumanMsg, setPengumumanMsg] = useState('');
+
+  // Rekap nilai siswa
+  const [rekapSiswaList, setRekapSiswaList] = useState([]);
+  const [rekapSiswaLoading, setRekapSiswaLoading] = useState(false);
+
+  // Badge pesan belum dibaca
+  const [pesanBadge, setPesanBadge] = useState(0);
+
+  // Quiz attempt limit
+  const [quizSudahPernah, setQuizSudahPernah] = useState(false);
+  const [quizHasilLama, setQuizHasilLama] = useState(null);
+
+  // Import massal siswa
+  const [importLoading, setImportLoading] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
+  const [importPreview, setImportPreview] = useState([]);
 
   // RBAC Admin
   const [auditLog, setAuditLog] = useState([]);
@@ -185,6 +209,7 @@ function App() {
         daftarSiswaList: 'daftarSiswaKelas', leaderboard: 'daftarSiswa',
         profilSiswa: 'daftarSiswaList', daftarGuru: 'dashboard', profilGuru: 'daftarGuru',
         pengaturan: 'dashboard', about: 'dashboard', pesan: 'dashboard',
+        pengumuman: 'dashboard', rekapNilai: 'dashboard', importSiswa: 'adminDashboard',
         adminDashboard: 'role', adminDetailUser: 'adminDashboard',
         adminSettings: 'adminDashboard', adminEditAbout: 'adminSettings',
         loginSiswa: 'menuSiswa', loginGuru: 'menuGuru',
@@ -224,6 +249,13 @@ function App() {
               setUserData(data);
               setUserRole(data.role);
               setPage(data.role === 'admin' ? 'adminDashboard' : 'dashboard');
+              // Load badge pesan belum dibaca (khusus siswa)
+              if (data.role === 'siswa') {
+                try {
+                  const badgeSnap = await getDocs(query(collection(db, 'pesan'), where('siswaId', '==', user.uid), where('pengirim', '==', 'guru'), where('dibaca', '==', false)));
+                  setPesanBadge(badgeSnap.size);
+                } catch (e) { /* silent */ }
+              }
             } else if (data.status === 'pending') {
               setPage('menunggu');
             } else {
@@ -1037,6 +1069,138 @@ function App() {
     setDaftarLoading(false);
   };
 
+  // ── Pengumuman ────────────────────────────────────────────────
+  const loadPengumuman = async () => {
+    setPengumumanLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'pengumuman'), orderBy('createdAt', 'desc')));
+      setPengumumanList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error(e); }
+    setPengumumanLoading(false);
+  };
+
+  const kirimPengumuman = async () => {
+    if (!pengumumanForm.judul.trim() || !pengumumanForm.isi.trim()) { setPengumumanMsg('❌ Judul dan isi wajib diisi!'); setTimeout(() => setPengumumanMsg(''), 2000); return; }
+    try {
+      const docRef = await addDoc(collection(db, 'pengumuman'), {
+        ...pengumumanForm,
+        pengirimId: userData.uid, pengirimNama: userData.nama,
+        pengirimRole: userRole, createdAt: new Date(),
+        waktu: new Date().toLocaleString('id-ID')
+      });
+      setPengumumanList(prev => [{ id: docRef.id, ...pengumumanForm, pengirimNama: userData.nama, pengirimRole: userRole, waktu: new Date().toLocaleString('id-ID') }, ...prev]);
+      setPengumumanForm({ judul: '', isi: '', target: 'semua' });
+      setPengumumanMsg('✅ Pengumuman terkirim!');
+    } catch (e) { setPengumumanMsg('❌ Gagal: ' + e.message); }
+    setTimeout(() => setPengumumanMsg(''), 3000);
+  };
+
+  const hapusPengumuman = async (id) => {
+    if (!window.confirm('Hapus pengumuman ini?')) return;
+    await deleteDoc(doc(db, 'pengumuman', id));
+    setPengumumanList(prev => prev.filter(p => p.id !== id));
+  };
+
+  // ── Rekap Nilai Siswa ─────────────────────────────────────────
+  const loadRekapNilaiSiswa = async () => {
+    if (!userData) return;
+    setRekapSiswaLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'hasilQuiz'), where('siswaId', '==', userData.uid)));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+      setRekapSiswaList(list);
+    } catch (e) { console.error(e); }
+    setRekapSiswaLoading(false);
+  };
+
+  // ── Badge pesan belum dibaca ───────────────────────────────────
+  const loadPesanBadge = async () => {
+    if (!userData || userRole !== 'siswa') return;
+    try {
+      const snap = await getDocs(query(collection(db, 'pesan'), where('siswaId', '==', userData.uid), where('pengirim', '==', 'guru'), where('dibaca', '==', false)));
+      setPesanBadge(snap.size);
+    } catch (e) { /* silent */ }
+  };
+
+  // ── Cek apakah siswa sudah pernah mengerjakan quiz bab ini ────
+  const cekSudahQuiz = async (babId) => {
+    if (!userData) return false;
+    try {
+      const snap = await getDocs(query(collection(db, 'hasilQuiz'), where('babId', '==', babId), where('siswaId', '==', userData.uid)));
+      if (!snap.empty) {
+        setQuizHasilLama(snap.docs[0].data());
+        setQuizSudahPernah(true);
+        return true;
+      }
+    } catch (e) { console.error(e); }
+    setQuizSudahPernah(false);
+    setQuizHasilLama(null);
+    return false;
+  };
+
+  // ── Import massal siswa dari CSV ──────────────────────────────
+  // Format CSV: NISN,Nama,Email,Password,Kelas,Jurusan,TglLahir,Agama,Telpon
+  const handleImportCSV = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      const lines = text.split('\n').filter(l => l.trim());
+      const header = lines[0].toLowerCase();
+      if (!header.includes('nisn') || !header.includes('nama')) {
+        setImportMsg('❌ Format salah. Kolom pertama harus ada NISN dan Nama. Download template dulu.'); return;
+      }
+      const rows = lines.slice(1).map(line => {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        return { nisn: cols[0], nama: cols[1], email: cols[2], password: cols[3] || cols[0], kelas: cols[4], jurusan: cols[5], tglLahir: cols[6] || '', agama: cols[7] || 'Islam', telpon: cols[8] || '-', valid: !!(cols[0] && cols[1] && cols[2] && cols[4] && cols[5]) };
+      }).filter(r => r.nisn);
+      setImportPreview(rows);
+      setImportMsg(`📋 ${rows.length} siswa siap diimport. Cek dulu, lalu klik "Mulai Import".`);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const mulaiImport = async () => {
+    const valid = importPreview.filter(r => r.valid);
+    if (!valid.length) { setImportMsg('❌ Tidak ada baris data yang valid.'); return; }
+    if (!window.confirm(`Import ${valid.length} siswa sekarang? Proses ini tidak bisa dibatalkan.`)) return;
+    setImportLoading(true);
+    let berhasil = 0, gagal = 0;
+    for (const s of valid) {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, s.email, s.password || s.nisn);
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          uid: cred.user.uid, role: 'siswa', status: 'approved',
+          nisn: s.nisn, nama: s.nama, email: s.email, kelas: s.kelas,
+          jurusan: s.jurusan, tglLahir: s.tglLahir, agama: s.agama, telpon: s.telpon,
+          citaCita: '', hobby: '', bio: '', fotoUrl: '', avatar: '🎓',
+          poinPG: 0, poinEssay: 0, poinModul: 0, totalPoin: 0, pelanggaran: 0, createdAt: new Date()
+        });
+        await setDoc(doc(db, 'loginIndex', 'siswa_' + s.nisn), { email: s.email });
+        await signOut(auth);
+        berhasil++;
+      } catch (e) { gagal++; console.error('Import gagal:', s.nisn, e.message); }
+      await new Promise(r => setTimeout(r, 300)); // jeda biar gak kena rate limit Firebase Auth
+    }
+    setImportPreview([]);
+    setImportMsg(`✅ Import selesai! ${berhasil} berhasil, ${gagal} gagal. Siswa langsung bisa login.`);
+    setImportLoading(false);
+    setTimeout(() => setImportMsg(''), 8000);
+  };
+
+  const downloadTemplateCSV = () => {
+    const header = 'NISN,Nama,Email,Password,Kelas,Jurusan,TglLahir,Agama,Telpon';
+    const contoh = '1234567890,Budi Santoso,budi@gmail.com,budi1234,10,A,2006-01-15,Islam,08123456789';
+    const blob = new Blob([header + '\n' + contoh], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'template_import_siswa.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const hitungTotalPoin = (u) => (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0);
 
   // Guru bisa pegang LEBIH dari satu mapel. Cek ke mapelList (array) dulu;
@@ -1383,6 +1547,10 @@ function App() {
       <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '12px' }}>
         <button onClick={() => setPage('adminSettings')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>⚙️ Pengaturan</button>
         <button onClick={() => { setAdminTab('mapel'); loadMapelAdmin(); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: adminTab === 'mapel' ? 'none' : '1px solid #e2e8f0', background: adminTab === 'mapel' ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'white', color: adminTab === 'mapel' ? 'white' : '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📐 Mapel</button>
+        <button onClick={() => { setImportPreview([]); setImportMsg(''); setPage('importSiswa'); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📥 Import</button>
+      </div>
+      <div style={{ width: '100%', marginBottom: '12px' }}>
+        <button onClick={() => { loadPengumuman(); setPage('pengumuman'); }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📢 Kelola Pengumuman</button>
       </div>
       {adminLoading && <LoadingSpinner />}
 
@@ -1827,16 +1995,16 @@ function App() {
             { label: 'Forum Belajar', icon: '💬', grad: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', glow: 'rgba(139,92,246,0.3)', to: 'forum' },
             { label: 'Daftar Siswa',  icon: '👥', grad: 'linear-gradient(135deg,#3b82f6,#2563eb)', glow: 'rgba(59,130,246,0.3)', to: 'daftarSiswa' },
             { label: 'Daftar Guru',   icon: '👨‍🏫', grad: 'linear-gradient(135deg,#ef4444,#dc2626)', glow: 'rgba(239,68,68,0.3)', to: 'daftarGuru' },
-            { label: 'Pesan',         icon: '✉️', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)', glow: 'rgba(6,182,212,0.3)', to: 'pesan' },
+            { label: 'Pesan',         icon: '✉️', grad: 'linear-gradient(135deg,#06b6d4,#0891b2)', glow: 'rgba(6,182,212,0.3)', to: 'pesan', badge: pesanBadge },
           ].map((m, i) => (
             <button key={i} onClick={() => {
               if (m.to === 'daftarGuru') { loadSemuaGuru(); setPage('daftarGuru'); }
-              else if (m.to === 'pesan') { setPage('pesan'); }
-
+              else if (m.to === 'pesan') { setPesanBadge(0); setPage('pesan'); }
               else if (m.to) setPage(m.to);
             }}
               style={{ padding: '20px 16px 16px', borderRadius: '20px', border: 'none', background: m.grad, color: 'white', fontWeight: '700', fontSize: '15px', cursor: m.to ? 'pointer' : 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', boxShadow: `0 6px 20px ${m.glow}`, opacity: m.to ? 1 : 0.55, textAlign: 'left', minHeight: '110px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: '8px', right: '8px', width: '40px', height: '40px', backgroundImage: 'radial-gradient(circle,rgba(255,255,255,0.25) 1px,transparent 1px)', backgroundSize: '8px 8px', borderRadius: '8px' }} />
+              {m.badge > 0 && <div style={{ position: 'absolute', top: '8px', left: '8px', background: '#ef4444', color: 'white', borderRadius: '10px', padding: '2px 7px', fontSize: '11px', fontWeight: '800', zIndex: 2 }}>{m.badge}</div>}
               <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>{m.icon}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <span style={{ fontSize: '14px', fontWeight: '700', color: 'white' }}>{m.label}</span>
@@ -1844,6 +2012,17 @@ function App() {
               </div>
             </button>
           ))}
+        </div>
+        {/* Pengumuman + Rekap Nilai */}
+        <div style={{ display: 'flex', gap: '10px', width: '100%', marginBottom: '14px' }}>
+          <button onClick={() => { loadPengumuman(); setPage('pengumuman'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(249,115,22,0.3)' }}>
+            📢 Pengumuman
+          </button>
+          {userRole === 'siswa' && (
+            <button onClick={() => { loadRekapNilaiSiswa(); setPage('rekapNilai'); }} style={{ flex: 1, padding: '14px 10px', borderRadius: '16px', border: 'none', background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}>
+              📊 Nilai Saya
+            </button>
+          )}
         </div>
         <button onClick={logout} style={{ width: '100%', padding: '14px', background: 'white', border: '1.5px solid #fecaca', color: '#ef4444', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: '700', boxShadow: '0 2px 8px rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           🚪 Keluar / Logout
@@ -1991,7 +2170,19 @@ function App() {
         {/* Quiz */}
         <div style={{ ...S.card, border: '1px solid #fde68a' }}>
           <p style={{ color: '#d97706', fontWeight: 'bold', marginBottom: '12px', fontSize: '15px' }}>📝 Quiz Pembelajaran</p>
-          {userRole === 'siswa' ? (quizSoalList.length > 0 ? <button onClick={() => { hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); setPage('quiz'); }} style={{ ...S.btnOrange, marginTop: 0 }}>🚀 Mulai Quiz</button> : <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada soal.</p>)
+          {userRole === 'siswa' ? (quizSoalList.length > 0 ? (
+            quizSudahPernah && quizHasilLama ? (
+              <div>
+                <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '12px', padding: '12px 14px', marginBottom: '10px' }}>
+                  <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '13px', margin: '0 0 4px' }}>✅ Sudah Pernah Dikerjakan</p>
+                  <p style={{ color: '#475569', fontSize: '12px', margin: 0 }}>Poin PG: {quizHasilLama.poinPG}/20 · Essay: {quizHasilLama.nilaiEssay !== null && quizHasilLama.nilaiEssay !== undefined ? quizHasilLama.nilaiEssay + '/100' : 'Menunggu penilaian'}</p>
+                </div>
+                <button onClick={() => { setQuizSudahPernah(false); setQuizHasilLama(null); hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); setPage('quiz'); }} style={{ ...S.btnOrange, marginTop: 0, background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>🔄 Kerjakan Ulang</button>
+              </div>
+            ) : (
+              <button onClick={async () => { const sdh = await cekSudahQuiz(selectedBab.id); if (!sdh) { hasilTersimpan.current = false; setQuizSoalAcak(acakSoal(quizSoalList)); setQuizSoalIndex(0); setQuizJawaban({}); setQuizSelesai(false); setTimer(20); setPage('quiz'); } }} style={{ ...S.btnOrange, marginTop: 0 }}>🚀 Mulai Quiz</button>
+            )
+          ) : <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada soal.</p>)
           : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}><button onClick={() => setPage('guruBuatQuiz')} style={{ background: '#8b5cf6', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>✏️ Buat / Edit Soal</button><button onClick={() => { loadHasilSiswa(selectedBab.id, `${selectedKelas?.tingkat}${selectedKelas?.jurusan}`); setPage('guruKelola'); }} style={{ background: '#1e3a8a', border: 'none', color: 'white', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>📊 Lihat Hasil Siswa</button></div>}
         </div>
         {/* Diskusi */}
@@ -2631,7 +2822,8 @@ function App() {
       <TopBar />
       <BackBtn to="daftarSiswaKelas" />
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👥 Kelas {daftarSiswaTingkat}{daftarSiswaJurusan}</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>{daftarLoading ? 'Memuat...' : `${daftarSiswaList.length} siswa · urut poin tertinggi`}</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '10px' }}>{daftarLoading ? 'Memuat...' : `${daftarSiswaList.length} siswa · urut poin tertinggi`}</p>
+      <input style={{ ...S.input, marginBottom: '12px' }} placeholder="🔍 Cari nama atau NISN..." value={searchSiswa} onChange={e => setSearchSiswa(e.target.value)} />
       {daftarLoading && <LoadingSpinner />}
       {!daftarLoading && daftarSiswaList.length === 0 && (
         <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
@@ -2639,12 +2831,15 @@ function App() {
           <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Kelas {daftarSiswaTingkat}{daftarSiswaJurusan} belum memiliki siswa.</p>
         </div>
       )}
-      {!daftarLoading && daftarSiswaList.length > 0 && (
+      {!daftarLoading && daftarSiswaList.length > 0 && (() => {
+        const filtered = searchSiswa.trim() ? daftarSiswaList.filter(s => s.nama?.toLowerCase().includes(searchSiswa.toLowerCase()) || s.nisn?.includes(searchSiswa)) : daftarSiswaList;
+        return (
         <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1.5px solid #bfdbfe', boxShadow: '0 4px 16px rgba(37,99,235,0.08)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '36px 28px 1fr 1fr 64px', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', padding: '10px 12px', gap: '8px', alignItems: 'center' }}>
             {['NO','','NAMA','NISN','POIN'].map((h, i) => <div key={i} style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontWeight: '700', textAlign: i === 4 ? 'right' : 'left' }}>{h}</div>)}
           </div>
-          {daftarSiswaList.map((s, i) => (
+          {filtered.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Tidak ada hasil untuk "{searchSiswa}"</div>}
+          {filtered.map((s, i) => (
             <div key={i} onClick={() => { setSelectedProfile({ ...s, type: 'siswa', rank: null }); setPage('profilSiswa'); }}
               style={{ display: 'grid', gridTemplateColumns: '36px 28px 1fr 1fr 64px', padding: '10px 12px', gap: '8px', alignItems: 'center', background: i % 2 === 0 ? 'white' : '#f8faff', borderTop: '1px solid #e2e8f0', cursor: 'pointer' }}>
               <div style={{ fontSize: '12px', fontWeight: '800', color: '#4f46e5', textAlign: 'center' }}>{i+1}</div>
@@ -2655,7 +2850,8 @@ function App() {
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 
@@ -2774,13 +2970,16 @@ function App() {
       <TopBar />
       <BackBtn to="dashboard" />
       <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👨‍🏫 Daftar Guru</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>{daftarLoading ? 'Memuat...' : `${daftarGuruList.length} guru aktif`}</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '10px' }}>{daftarLoading ? 'Memuat...' : `${daftarGuruList.length} guru aktif`}</p>
+      <input style={{ ...S.input, marginBottom: '12px' }} placeholder="🔍 Cari nama atau mata pelajaran..." value={searchGuru} onChange={e => setSearchGuru(e.target.value)} />
       {daftarLoading && <LoadingSpinner />}
       {!daftarLoading && daftarGuruList.length === 0 && <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}><p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Belum ada guru terdaftar.</p></div>}
-      {daftarGuruList.map((g, i) => (
+      {(searchGuru.trim() ? daftarGuruList.filter(g => g.nama?.toLowerCase().includes(searchGuru.toLowerCase()) || g.mapel?.toLowerCase().includes(searchGuru.toLowerCase()) || g.namaPanggilan?.toLowerCase().includes(searchGuru.toLowerCase())) : daftarGuruList).map((g, i) => (
         <div key={i} onClick={() => { setSelectedProfile({ ...g, type: 'guru' }); setPage('profilGuru'); }}
           style={{ ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, boxShadow: '0 4px 12px rgba(220,38,38,0.2)' }}>{g.avatar || '👨‍🏫'}</div>
+          <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: g.fotoUrl ? 'none' : 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, boxShadow: '0 4px 12px rgba(220,38,38,0.2)', overflow: 'hidden' }}>
+            {g.fotoUrl ? <img src={g.fotoUrl} alt={g.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (g.avatar || '👨‍🏫')}
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.namaPanggilan || g.nama}</p>
             <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 1px', fontWeight: '600' }}>{g.mapel}</p>
@@ -2829,6 +3028,161 @@ function App() {
     return <PesanPage userData={userData} userRole={userRole} mapelList={mapelAktif} S={S} TopBar={TopBar} BackBtn={BackBtn} LoadingSpinner={LoadingSpinner} setPage={setPage} db={db} />;
   }
 
+
+  // ══════════════════════════════════════════════════════════════════
+  // PENGUMUMAN
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'pengumuman') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="dashboard" />
+      <p style={{ color: '#f97316', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📢 Pengumuman</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Informasi penting dari sekolah</p>
+      {pengumumanMsg && <div style={pengumumanMsg.startsWith('✅') ? S.successBox : S.errBox}>{pengumumanMsg}</div>}
+      {/* Form kirim pengumuman — hanya admin & guru */}
+      {(userRole === 'admin' || userRole === 'guru') && (
+        <div style={{ ...S.card, border: '2px dashed #f97316', marginBottom: '16px' }}>
+          <p style={{ color: '#f97316', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>➕ Buat Pengumuman</p>
+          <label style={S.label}>Judul</label>
+          <input style={S.input} placeholder="Judul pengumuman..." value={pengumumanForm.judul} onChange={e => setPengumumanForm(p => ({ ...p, judul: e.target.value }))} />
+          <label style={S.label}>Isi</label>
+          <textarea style={{ ...S.input, height: '80px', resize: 'none' }} placeholder="Tulis pengumuman lengkap di sini..." value={pengumumanForm.isi} onChange={e => setPengumumanForm(p => ({ ...p, isi: e.target.value }))} />
+          <label style={S.label}>Untuk</label>
+          <select style={S.select} value={pengumumanForm.target} onChange={e => setPengumumanForm(p => ({ ...p, target: e.target.value }))}>
+            <option value="semua">🌐 Semua (Siswa & Guru)</option>
+            <option value="siswa">🎓 Siswa saja</option>
+            <option value="guru">👨‍🏫 Guru saja</option>
+          </select>
+          <button onClick={kirimPengumuman} style={{ ...S.btnOrange, marginTop: 0 }}>📢 Kirim Pengumuman</button>
+        </div>
+      )}
+      {pengumumanLoading && <LoadingSpinner />}
+      {!pengumumanLoading && pengumumanList.length === 0 && (
+        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px' }}>📢</div>
+          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada pengumuman.</p>
+        </div>
+      )}
+      {pengumumanList.filter(p => p.target === 'semua' || p.target === userRole).map((p, i) => (
+        <div key={p.id || i} style={{ ...S.card, border: '1px solid #fed7aa' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: '800', fontSize: '15px', margin: '0 0 3px', color: '#0f172a' }}>{p.judul}</p>
+              <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>📅 {p.waktu} · {p.pengirimNama} {p.pengirimRole === 'admin' ? '(Admin)' : '(Guru)'}</p>
+            </div>
+            {(userRole === 'admin' || p.pengirimId === userData?.uid) && (
+              <button onClick={() => hapusPengumuman(p.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px', padding: '0 0 0 8px' }}>✕</button>
+            )}
+          </div>
+          <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{p.isi}</p>
+          <div style={{ marginTop: '8px' }}>
+            <span style={{ fontSize: '10px', background: '#fff7ed', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+              {p.target === 'semua' ? '🌐 Semua' : p.target === 'siswa' ? '🎓 Siswa' : '👨‍🏫 Guru'}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // REKAP NILAI SISWA (siswa lihat nilai & progress sendiri)
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'rekapNilai') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="dashboard" />
+      <p style={{ color: '#10b981', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📊 Nilai Saya</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Rekap seluruh hasil quiz dan poin kamu</p>
+      {/* Ringkasan poin */}
+      <div style={{ width: '100%', background: 'linear-gradient(135deg,#10b981,#059669)', borderRadius: '16px', padding: '18px', marginBottom: '16px', boxShadow: '0 6px 20px rgba(16,185,129,0.3)' }}>
+        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 8px' }}>TOTAL POIN KAMU</p>
+        <p style={{ color: 'white', fontSize: '36px', fontWeight: '900', margin: '0 0 12px' }}>{(userData?.poinPG||0)+(userData?.poinEssay||0)+(userData?.poinModul||0)} <span style={{ fontSize: '14px', opacity: 0.8 }}>poin</span></p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+          {[{ label: 'Quiz PG', val: userData?.poinPG||0 }, { label: 'Essay', val: userData?.poinEssay||0 }, { label: 'Modul', val: userData?.poinModul||0 }].map((s, i) => (
+            <div key={i} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '8px', textAlign: 'center' }}>
+              <p style={{ color: 'white', fontWeight: '900', fontSize: '18px', margin: '0 0 2px' }}>{s.val}</p>
+              <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '10px', margin: 0 }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      {rekapSiswaLoading && <LoadingSpinner />}
+      {!rekapSiswaLoading && rekapSiswaList.length === 0 && (
+        <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px' }}>📝</div>
+          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada quiz yang dikerjakan.</p>
+        </div>
+      )}
+      {rekapSiswaList.map((h, i) => (
+        <div key={i} style={{ ...S.card, border: '1px solid #bbf7d0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{h.mapel} — {h.babJudul || 'Bab'}</p>
+              <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>📅 {h.timestamp ? new Date(h.timestamp.seconds*1000).toLocaleDateString('id-ID') : '-'}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ color: '#10b981', fontWeight: '900', fontSize: '18px', margin: 0 }}>{h.poinPG || 0}<span style={{ fontSize: '11px', color: '#94a3b8' }}>/20</span></p>
+              <p style={{ color: '#94a3b8', fontSize: '10px', margin: 0 }}>Poin PG</p>
+            </div>
+          </div>
+          <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1, background: '#f0fdf4', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+              <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '13px', margin: 0 }}>Essay: {h.nilaiEssay !== null && h.nilaiEssay !== undefined ? h.nilaiEssay + '/100' : '⏳ Menunggu'}</p>
+            </div>
+            <div style={{ flex: 1, background: '#eff6ff', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+              <p style={{ color: '#2563eb', fontWeight: '700', fontSize: '13px', margin: 0 }}>Modul: {h.modulDurasi||0} mnt</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════
+  // IMPORT MASSAL SISWA (admin only)
+  // ══════════════════════════════════════════════════════════════════
+  if (page === 'importSiswa') return (
+    <div style={S.page}>
+      <TopBar />
+      <BackBtn to="adminDashboard" fn={() => setPage('adminDashboard')} />
+      <p style={{ color: '#4f46e5', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>📥 Import Massal Siswa</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Upload file CSV untuk mendaftarkan banyak siswa sekaligus</p>
+      {importMsg && <div style={importMsg.startsWith('✅') ? S.successBox : S.errBox}>{importMsg}</div>}
+      <div style={{ ...S.card, border: '1px solid #bfdbfe' }}>
+        <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>📋 Format File CSV</p>
+        <p style={{ color: '#475569', fontSize: '12px', marginBottom: '10px', lineHeight: '1.7' }}>Kolom wajib: <strong>NISN, Nama, Email, Password, Kelas, Jurusan</strong>. Kolom opsional: TglLahir, Agama, Telpon. Kalau Password dikosongkan, otomatis pakai NISN sebagai password default.</p>
+        <button onClick={downloadTemplateCSV} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: '#eff6ff', color: '#2563eb', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>📄 Download Template CSV</button>
+      </div>
+      <div style={{ ...S.card, border: '2px dashed #4f46e5' }}>
+        <p style={{ color: '#4f46e5', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>📤 Upload File CSV</p>
+        <label style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1.5px dashed #93c5fd', background: '#eff6ff', color: '#2563eb', fontSize: '13px', fontWeight: '700', textAlign: 'center', cursor: 'pointer', display: 'block' }}>
+          {importLoading ? '⏳ Sedang mengimport...' : '📂 Pilih File CSV'}
+          <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCSV} disabled={importLoading} />
+        </label>
+      </div>
+      {importPreview.length > 0 && (
+        <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
+          <p style={{ color: '#16a34a', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>👁️ Preview — {importPreview.filter(r => r.valid).length} valid, {importPreview.filter(r => !r.valid).length} bermasalah</p>
+          <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '12px' }}>
+            {importPreview.map((s, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '13px', color: s.valid ? '#0f172a' : '#ef4444', fontWeight: '600' }}>{s.nama || '(nama kosong)'}</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>NISN: {s.nisn} · {s.kelas}{s.jurusan}</p>
+                </div>
+                <span style={{ fontSize: '16px' }}>{s.valid ? '✅' : '❌'}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={mulaiImport} disabled={importLoading} style={{ ...S.btnOrange, marginTop: 0 }}>
+            {importLoading ? '⏳ Mengimport...' : `🚀 Import ${importPreview.filter(r => r.valid).length} Siswa Sekarang`}
+          </button>
+          <p style={{ color: '#94a3b8', fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>⚠️ Proses ini tidak bisa dibatalkan. Pastikan data sudah benar.</p>
+        </div>
+      )}
+    </div>
+  );
 
   // fallback
   return <div style={S.page}><TopBar /><p style={{color:'#64748b'}}>Halaman tidak ditemukan</p></div>;
@@ -3099,6 +3453,29 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
 }
 
 export default App;
+
+// ══════════════════════════════════════════════════════════════════
+// ERROR BOUNDARY — tangkap error React dan tampilkan halaman ramah
+// ══════════════════════════════════════════════════════════════════
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('E-JULU Error:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#e8f0ff,#f0f4ff)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: "'Inter',system-ui,sans-serif", maxWidth: '430px', margin: '0 auto' }}>
+          <div style={{ fontSize: '64px', marginBottom: '16px' }}>😕</div>
+          <p style={{ color: '#ef4444', fontSize: '20px', fontWeight: '900', marginBottom: '8px' }}>Ups, ada gangguan!</p>
+          <p style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', marginBottom: '24px', lineHeight: '1.7' }}>Aplikasi mengalami masalah tidak terduga. Coba refresh halaman ini atau hubungi Restuadi G. Sinaga, S.Kom.</p>
+          <button onClick={() => window.location.reload()} style={{ padding: '14px 32px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>🔄 Refresh Halaman</button>
+          <p style={{ color: '#94a3b8', fontSize: '11px', marginTop: '24px' }}>✦ Development By Restuadi G. Sinaga, S.Kom ✦</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════
 // ADMIN TAMBAH MAPEL COMPONENT
