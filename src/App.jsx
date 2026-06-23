@@ -191,9 +191,14 @@ function App() {
   const [gantiPassLoading, setGantiPassLoading] = useState(false);
   const [showGantiPass, setShowGantiPass] = useState(false);
   const [showGantiPassKonfirm, setShowGantiPassKonfirm] = useState(false);
-  const [lengkapForm, setLengkapForm] = useState({ jenisKelamin: '', agama: 'Islam', kewarganegaraan: 'WNI', email: '', telpon: '' });
+  const [lengkapForm, setLengkapForm] = useState({ jenisKelamin: '', agama: 'Islam', kewarganegaraan: 'WNI', email: '', telpon: '', bio: '', namaPanggilan: '' });
   const [lengkapMsg, setLengkapMsg] = useState('');
   const [lengkapLoading, setLengkapLoading] = useState(false);
+
+  // Import guru
+  const [importGuruLoading, setImportGuruLoading] = useState(false);
+  const [importGuruMsg, setImportGuruMsg] = useState('');
+  const [importGuruPreview, setImportGuruPreview] = useState([]);
 
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
@@ -238,7 +243,7 @@ function App() {
     const stack = pageStack.current;
     const cur = stack[stack.length - 1];
     // Halaman exit point: jangan pop, tahan di sini
-    if (cur === 'splash' || cur === 'dashboard' || cur === 'gantiPasswordPertama' || cur === 'lengkapiProfil' || stack.length <= 1) {
+    if (cur === 'splash' || cur === 'dashboard' || cur === 'gantiPasswordPertama' || cur === 'lengkapiProfil' || cur === 'importGuru' || stack.length <= 1) {
       window.history.pushState({ p: 'hold' }, '', window.location.href);
       return;
     }
@@ -593,7 +598,7 @@ function App() {
       if (siswaData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
       setUserData(siswaData); setUserRole('siswa');
       if (!siswaData.passwordChanged) { goTo('gantiPasswordPertama'); }
-      else if (!siswaData.profileComplete) { setLengkapForm({ jenisKelamin: siswaData.jenisKelamin||'', agama: siswaData.agama||'Islam', kewarganegaraan: siswaData.kewarganegaraan||'WNI', email: siswaData.email||'', telpon: siswaData.telpon||'' }); goTo('lengkapiProfil'); }
+      else if (!siswaData.profileComplete) { setLengkapForm({ jenisKelamin: siswaData.jenisKelamin||'', agama: siswaData.agama||'Islam', kewarganegaraan: siswaData.kewarganegaraan||'WNI', email: siswaData.email||'', telpon: siswaData.telpon||'', bio: '', namaPanggilan: '' }); goTo('lengkapiProfil'); }
       else goTo('dashboard');
     } catch (e) { setLoginError('NISN atau password salah!'); }
     setLoading(false);
@@ -613,7 +618,7 @@ function App() {
       if (guruData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
       setUserData(guruData); setUserRole('guru');
       if (!guruData.passwordChanged) { goTo('gantiPasswordPertama'); }
-      else if (!guruData.profileComplete) { setLengkapForm({ jenisKelamin: guruData.jenisKelamin||'', agama: guruData.agama||'Islam', kewarganegaraan: guruData.kewarganegaraan||'WNI', email: guruData.email||'', telpon: guruData.telpon||'' }); goTo('lengkapiProfil'); }
+      else if (!guruData.profileComplete) { setLengkapForm({ jenisKelamin: guruData.jenisKelamin||'', agama: guruData.agama||'Islam', kewarganegaraan: guruData.kewarganegaraan||'WNI', email: guruData.email||'', telpon: guruData.telpon||'', bio: guruData.bio||'', namaPanggilan: guruData.namaPanggilan||'' }); goTo('lengkapiProfil'); }
       else goTo('dashboard');
     } catch (e) { setLoginError('NIP/NIK atau password salah!'); }
     setLoading(false);
@@ -1388,6 +1393,153 @@ function App() {
     setKalenderList(prev => prev.filter(k => k.id !== id));
   };
 
+  // ── Import massal guru ───────────────────────────────────────────
+  const handleImportGuruExcel = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!window.XLSX) {
+      setImportGuruMsg('⏳ Memuat library...');
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = res; s.onerror = rej; document.head.appendChild(s);
+      });
+    }
+    const XLSX = window.XLSX;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (data.length < 2) { setImportGuruMsg('❌ File kosong.'); return; }
+        const h = data[0].map(x => String(x).toLowerCase().trim());
+        const iNIP     = h.findIndex(x => x.includes('nip'));
+        const iNIK     = h.findIndex(x => x.includes('nik'));
+        const iNama    = h.findIndex(x => x.includes('nama') && !x.includes('panggil'));
+        const iPanggil = h.findIndex(x => x.includes('panggil'));
+        const iJabatan = h.findIndex(x => x.includes('jabatan'));
+        const iMapel   = h.findIndex(x => x.includes('mapel') || x.includes('pelajaran') || x.includes('diampu'));
+        if (iNama === -1) { setImportGuruMsg('❌ Kolom Nama wajib ada.'); return; }
+        const rows = data.slice(1).map(cols => {
+          const nip      = iNIP     >= 0 ? String(cols[iNIP]     || '').trim() : '';
+          const nik      = iNIK     >= 0 ? String(cols[iNIK]     || '').trim() : '';
+          const nama     = iNama    >= 0 ? String(cols[iNama]    || '').trim() : '';
+          const panggil  = iPanggil >= 0 ? String(cols[iPanggil] || '').trim() : '';
+          const jabatan  = iJabatan >= 0 ? String(cols[iJabatan] || '').trim() : 'Guru';
+          const mapelRaw = iMapel   >= 0 ? String(cols[iMapel]   || '').trim() : '';
+          // mapelList: bisa dipisah koma/titik koma
+          const mapelList = mapelRaw ? mapelRaw.split(/[,;]/).map(m => m.trim()).filter(Boolean) : [];
+          const mapel = mapelList[0] || '';
+          // login identifier: pakai NIP jika ada, else NIK, else nama (sanitized)
+          const loginId = nip || nik || nama.toLowerCase().replace(/\s+/g, '.');
+          const email = loginId.replace(/[^a-z0-9.]/gi, '') + '@ejulu.sch.id';
+          const valid = !!(nama && (nip || nik));
+          return { nip, nik, nama, namaPanggilan: panggil, jabatan, mapel, mapelList, email, valid };
+        }).filter(r => r.nama);
+        setImportGuruPreview(rows);
+        const v = rows.filter(r => r.valid).length;
+        const inv = rows.filter(r => !r.valid).length;
+        setImportGuruMsg(`📋 ${v} guru siap diimport${inv > 0 ? `, ${inv} baris bermasalah (NIP/NIK kosong)` : ''}. Password default: ejulu123`);
+      } catch (err) { setImportGuruMsg('❌ Gagal: ' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const mulaiImportGuru = async () => {
+    const valid = importGuruPreview.filter(r => r.valid);
+    if (!valid.length) { setImportGuruMsg('❌ Tidak ada data valid.'); return; }
+    if (!window.confirm(`Import ${valid.length} guru sekarang?`)) return;
+    setImportGuruLoading(true);
+    let berhasil = 0, gagal = 0;
+    for (const g of valid) {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, g.email, 'ejulu123');
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          uid: cred.user.uid, role: 'guru', status: 'approved',
+          nip: g.nip, nik: g.nik, nama: g.nama, namaPanggilan: g.namaPanggilan,
+          jabatan: g.jabatan, mapel: g.mapel, mapelList: g.mapelList,
+          email: g.email, telpon: '-', bio: '', agama: 'Islam',
+          jenisKelamin: '', kewarganegaraan: 'WNI',
+          passwordChanged: false, profileComplete: false,
+          fotoUrl: '', avatar: '👨‍🏫', createdAt: new Date()
+        });
+        if (g.nip) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nip), { email: g.email });
+        if (g.nik) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nik), { email: g.email });
+        await signOut(auth);
+        berhasil++;
+      } catch (e) { gagal++; console.error('Import guru gagal:', g.nama, e.message); }
+      await new Promise(r => setTimeout(r, 300));
+    }
+    setImportGuruPreview([]);
+    setImportGuruMsg(`✅ Import selesai! ${berhasil} berhasil, ${gagal} gagal.`);
+    setImportGuruLoading(false);
+    setTimeout(() => setImportGuruMsg(''), 8000);
+  };
+
+  const downloadTemplateGuruExcel = async () => {
+    await loadExcelJS();
+    const ExcelJS = window.ExcelJS;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'E-JULU';
+    const ws = wb.addWorksheet('Template Import Guru', { views: [{ state: 'frozen', ySplit: 1 }] });
+    ws.columns = [
+      { header: 'NIP',             key: 'nip',     width: 20 },
+      { header: 'NIK',             key: 'nik',     width: 18 },
+      { header: 'Nama Lengkap',    key: 'nama',    width: 30 },
+      { header: 'Nama Panggilan',  key: 'panggil', width: 18 },
+      { header: 'Jabatan',         key: 'jabatan', width: 20 },
+      { header: 'Mapel Diampu',    key: 'mapel',   width: 28 },
+    ];
+    const hRow = ws.getRow(1);
+    hRow.height = 28;
+    hRow.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = { top:{style:'thin',color:{argb:'FFA78BFA'}}, left:{style:'thin',color:{argb:'FFA78BFA'}}, bottom:{style:'medium',color:{argb:'FFEDE9FE'}}, right:{style:'thin',color:{argb:'FFA78BFA'}} };
+    });
+    const contoh = [
+      { nip:'197001011995011001', nik:'1234567890123456', nama:'Dr. Budi Santoso, M.Pd', panggil:'Pak Budi', jabatan:'Guru Mapel', mapel:'Matematika' },
+      { nip:'',                  nik:'9876543210987654', nama:'Siti Rahayu, S.Pd',       panggil:'Bu Siti',  jabatan:'Guru Mapel', mapel:'Bahasa Indonesia' },
+      { nip:'198505152010012002', nik:'1122334455667788', nama:'Ahmad Fauzan, S.T',       panggil:'Pak Ahmad',jabatan:'Guru Mapel', mapel:'Fisika' },
+    ];
+    const border = { top:{style:'thin',color:{argb:'FFEDE9FE'}}, left:{style:'thin',color:{argb:'FFEDE9FE'}}, bottom:{style:'thin',color:{argb:'FFEDE9FE'}}, right:{style:'thin',color:{argb:'FFEDE9FE'}} };
+    contoh.forEach((d, idx) => {
+      const row = ws.addRow(d);
+      row.height = 20;
+      const bg = idx % 2 === 0 ? 'FFF5F3FF' : 'FFFFFFFF';
+      row.eachCell({ includeEmpty: true }, (cell, c) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF0F172A' } };
+        cell.alignment = { horizontal: c === 3 || c === 4 ? 'left' : 'center', vertical: 'middle' };
+        cell.border = border;
+      });
+    });
+    // 10 baris kosong
+    for (let i = 0; i < 10; i++) {
+      const row = ws.addRow({});
+      row.height = 20;
+      const bg = i % 2 === 0 ? 'FFF5F3FF' : 'FFFFFFFF';
+      for (let c = 1; c <= 6; c++) {
+        const cell = row.getCell(c);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.border = border;
+      }
+    }
+    ws.addRow([]);
+    const note = ws.addRow(['* NIP atau NIK wajib diisi minimal satu. Mapel bisa diisi lebih dari satu, pisahkan dengan koma. Password default: ejulu123']);
+    note.getCell(1).font = { italic: true, color: { argb: 'FF64748B' }, size: 9 };
+    ws.mergeCells(`A${note.number}:F${note.number}`);
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'Template_Import_Guru_EJULU.xlsx'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ── Ganti password pertama kali ──────────────────────────────────
   const submitGantiPasswordPertama = async () => {
     if (!gantiPassBaru || gantiPassBaru.length < 6) { setGantiPassMsg('❌ Password minimal 6 karakter!'); return; }
@@ -1418,17 +1570,20 @@ function App() {
     if (!lengkapForm.jenisKelamin) { setLengkapMsg('❌ Jenis kelamin wajib dipilih!'); return; }
     if (!lengkapForm.email || !lengkapForm.email.includes('@')) { setLengkapMsg('❌ Email aktif wajib diisi!'); return; }
     if (!lengkapForm.telpon || lengkapForm.telpon.length < 8) { setLengkapMsg('❌ Nomor telepon tidak valid!'); return; }
+    if (userRole === 'guru' && !lengkapForm.bio?.trim()) { setLengkapMsg('❌ Bio singkat wajib diisi untuk guru!'); return; }
     setLengkapLoading(true);
     try {
-      await updateDoc(doc(db, 'users', userData.uid), {
+      const update = {
         jenisKelamin: lengkapForm.jenisKelamin,
         agama: lengkapForm.agama,
         kewarganegaraan: lengkapForm.kewarganegaraan,
         email: lengkapForm.email,
         telpon: lengkapForm.telpon,
         profileComplete: true,
-      });
-      setUserData(prev => ({ ...prev, ...lengkapForm, profileComplete: true }));
+      };
+      if (userRole === 'guru') { update.bio = lengkapForm.bio || ''; update.namaPanggilan = lengkapForm.namaPanggilan || userData?.namaPanggilan || ''; }
+      await updateDoc(doc(db, 'users', userData.uid), update);
+      setUserData(prev => ({ ...prev, ...update }));
       goTo('dashboard');
     } catch (e) { setLengkapMsg('❌ Gagal simpan: ' + e.message); }
     setLengkapLoading(false);
@@ -1483,27 +1638,22 @@ function App() {
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         if (data.length < 2) { setImportMsg('❌ File kosong atau tidak ada data.'); return; }
         const headerRow = data[0].map(h => String(h).toLowerCase().trim());
-        const iNISN = headerRow.findIndex(h => h.includes('nisn'));
-        const iNIS  = headerRow.findIndex(h => h === 'nis' || (h.includes('nis') && !h.includes('nisn')));
-        const iNama = headerRow.findIndex(h => h.includes('nama'));
-        const iKelas = headerRow.findIndex(h => h.includes('kelas'));
+        const iNISN    = headerRow.findIndex(h => h.includes('nisn'));
+        const iNama    = headerRow.findIndex(h => h.includes('nama'));
+        const iKelas   = headerRow.findIndex(h => h.includes('kelas'));
         const iJurusan = headerRow.findIndex(h => h.includes('jurusan'));
-        const iTgl = headerRow.findIndex(h => h.includes('tgl') || h.includes('lahir') || h.includes('tanggal'));
         if (iNISN === -1 || iNama === -1) {
           setImportMsg('❌ Kolom NISN dan Nama wajib ada. Gunakan template yang disediakan.'); return;
         }
         const rows = data.slice(1).map(cols => {
-          const nisn = String(cols[iNISN] || '').trim();
-          const nis  = iNIS  >= 0 ? String(cols[iNIS]  || '').trim() : '';
-          const nama = iNama >= 0 ? String(cols[iNama] || '').trim() : '';
-          const kelas = iKelas >= 0 ? String(cols[iKelas] || '').trim() : '';
+          const nisn    = String(cols[iNISN]    || '').trim();
+          const nama    = iNama    >= 0 ? String(cols[iNama]    || '').trim() : '';
+          const kelas   = iKelas   >= 0 ? String(cols[iKelas]   || '').trim() : '';
           const jurusan = iJurusan >= 0 ? String(cols[iJurusan] || '').trim() : '';
-          const tglLahir = iTgl >= 0 ? String(cols[iTgl] || '').trim() : '';
-          // Email dibuat otomatis dari NISN, password default ejulu123
-          const email = nisn + '@ejulu.sch.id';
+          const email   = nisn + '@ejulu.sch.id';
           const password = 'ejulu123';
-          const valid = !!(nisn && nama && kelas && jurusan);
-          return { nisn, nis, nama, email, password, kelas, jurusan, tglLahir, agama: 'Islam', telpon: '-', valid };
+          const valid   = !!(nisn && nama && kelas && jurusan);
+          return { nisn, nama, email, password, kelas, jurusan, tglLahir: '', agama: 'Islam', telpon: '-', valid };
         }).filter(r => r.nisn);
         setImportPreview(rows);
         const validCount = rows.filter(r => r.valid).length;
@@ -1527,7 +1677,7 @@ function App() {
         const cred = await createUserWithEmailAndPassword(auth, s.email, s.password || s.nisn);
         await setDoc(doc(db, 'users', cred.user.uid), {
           uid: cred.user.uid, role: 'siswa', status: 'approved',
-          nisn: s.nisn, nis: s.nis || '', nama: s.nama, email: s.email, kelas: s.kelas,
+          nisn: s.nisn, nama: s.nama, email: s.email, kelas: s.kelas,
           jurusan: s.jurusan, tglLahir: s.tglLahir, agama: 'Islam', telpon: '-',
           jenisKelamin: '', kewarganegaraan: 'WNI',
           passwordChanged: false, profileComplete: false,
@@ -1563,12 +1713,10 @@ function App() {
 
     // Definisi kolom
     ws.columns = [
-      { header: 'NISN',      key: 'nisn',     width: 16 },
-      { header: 'NIS',       key: 'nis',      width: 12 },
-      { header: 'Nama',      key: 'nama',     width: 28 },
-      { header: 'Kelas',     key: 'kelas',    width: 8  },
-      { header: 'Jurusan',   key: 'jurusan',  width: 10 },
-      { header: 'Tgl Lahir', key: 'tgl',      width: 14 },
+      { header: 'NISN',    key: 'nisn',    width: 16 },
+      { header: 'Nama',    key: 'nama',    width: 30 },
+      { header: 'Kelas',   key: 'kelas',   width: 8  },
+      { header: 'Jurusan', key: 'jurusan', width: 10 },
     ];
 
     // Style baris header (baris 1)
@@ -1588,11 +1736,11 @@ function App() {
 
     // Data contoh
     const contoh = [
-      { nisn:'1234567890', nis:'12345', nama:'Budi Santoso',  kelas:'10', jurusan:'A', tgl:'2006-01-15' },
-      { nisn:'0987654321', nis:'67890', nama:'Siti Aminah',   kelas:'10', jurusan:'B', tgl:'2007-03-22' },
-      { nisn:'1122334455', nis:'11223', nama:'Ahmad Fauzi',   kelas:'11', jurusan:'A', tgl:'2005-07-10' },
-      { nisn:'5544332211', nis:'55443', nama:'Dewi Rahayu',   kelas:'11', jurusan:'B', tgl:'2005-11-28' },
-      { nisn:'9988776655', nis:'99887', nama:'Rizki Pratama', kelas:'12', jurusan:'A', tgl:'2004-04-05' },
+      { nisn:'1234567890', nama:'Budi Santoso',  kelas:'10', jurusan:'A' },
+      { nisn:'0987654321', nama:'Siti Aminah',   kelas:'10', jurusan:'B' },
+      { nisn:'1122334455', nama:'Ahmad Fauzi',   kelas:'11', jurusan:'A' },
+      { nisn:'5544332211', nama:'Dewi Rahayu',   kelas:'11', jurusan:'B' },
+      { nisn:'9988776655', nama:'Rizki Pratama', kelas:'12', jurusan:'A' },
     ];
 
     const borderThin = {
@@ -1633,9 +1781,9 @@ function App() {
 
     // Baris keterangan di bawah
     ws.addRow([]);
-    const noteRow = ws.addRow(['* Kolom wajib: NISN, Nama, Kelas, Jurusan. Password login otomatis: ejulu123. Siswa wajib ganti password saat pertama login.']);
+    const noteRow = ws.addRow(['* Kolom wajib: NISN, Nama, Kelas, Jurusan. Password login semua siswa: ejulu123 (wajib diganti saat pertama login).']);
     noteRow.getCell(1).font = { italic: true, color: { argb: 'FF64748B' }, size: 9 };
-    ws.mergeCells(`A${noteRow.number}:F${noteRow.number}`);
+    ws.mergeCells(`A${noteRow.number}:D${noteRow.number}`);
 
     // Download
     const buf = await wb.xlsx.writeBuffer();
@@ -2009,7 +2157,8 @@ function App() {
       <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '12px' }}>
         <button onClick={() => goTo('adminSettings')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>⚙️ Pengaturan</button>
         <button onClick={() => { setAdminTab('mapel'); loadMapelAdmin(); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: adminTab === 'mapel' ? 'none' : '1px solid #e2e8f0', background: adminTab === 'mapel' ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'white', color: adminTab === 'mapel' ? 'white' : '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📐 Mapel</button>
-        <button onClick={() => { setImportPreview([]); setImportMsg(''); goTo('importSiswa'); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📥 Import</button>
+        <button onClick={() => { setImportPreview([]); setImportMsg(''); goTo('importSiswa'); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📥 Siswa</button>
+        <button onClick={() => { setImportGuruPreview([]); setImportGuruMsg(''); goTo('importGuru'); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#7c3aed', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>👨‍🏫 Guru</button>
       </div>
       <div style={{ width: '100%', marginBottom: '12px' }}>
         <button onClick={() => { loadPengumuman(); goTo('pengumuman'); }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#f97316,#ea580c)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>📢 Kelola Pengumuman</button>
@@ -3356,7 +3505,7 @@ function App() {
       const wb = new ExcelJS.Workbook(); wb.creator = 'E-JULU';
       const ws = wb.addWorksheet(`Kelas ${daftarSiswaTingkat}${daftarSiswaJurusan}`, { views: [{ state: 'frozen', ySplit: 2 }] });
       // Baris judul
-      ws.mergeCells('A1:K1');
+      ws.mergeCells('A1:J1');
       const title = ws.getCell('A1');
       title.value = `DAFTAR SISWA KELAS ${daftarSiswaTingkat}${daftarSiswaJurusan} — SMA NEGERI 1 LUMBANJULU`;
       title.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' }, name: 'Calibri' };
@@ -3364,12 +3513,12 @@ function App() {
       title.alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getRow(1).height = 30;
       ws.columns = [
-        { key:'no',     width: 5  }, { key:'nisn',   width: 14 }, { key:'nis',    width: 10 },
-        { key:'nama',   width: 28 }, { key:'jk',     width: 12 }, { key:'agama',  width: 12 },
+        { key:'no',     width: 5  }, { key:'nisn',   width: 14 },
+      { key:'nama',   width: 28 }, { key:'jk',     width: 12 }, { key:'agama',  width: 12 },
         { key:'kwn',    width: 8  }, { key:'kelas',  width: 8  }, { key:'jurusan',width: 9  },
         { key:'tgl',    width: 13 }, { key:'telpon', width: 16 },
       ];
-      const hRow = ws.addRow(['No','NISN','NIS','Nama Lengkap','Jenis Kelamin','Agama','WN','Kelas','Jurusan','Tgl Lahir','No. Telepon']);
+      const hRow = ws.addRow(['No','NISN','Nama Lengkap','Jenis Kelamin','Agama','WN','Kelas','Jurusan','Tgl Lahir','No. Telepon']);
       hRow.height = 22;
       hRow.eachCell(cell => {
         cell.font = { bold:true, color:{argb:'FFFFFFFF'}, size:10, name:'Calibri' };
@@ -3382,7 +3531,7 @@ function App() {
       daftarSiswaList.forEach((s, idx) => {
         if (s.jenisKelamin === 'Laki-laki') laki++;
         else if (s.jenisKelamin === 'Perempuan') perempuan++;
-        const row = ws.addRow([idx+1, s.nisn||'-', s.nis||'-', s.nama||'-', s.jenisKelamin||'-', s.agama||'-', s.kewarganegaraan||'WNI', s.kelas||'-', s.jurusan||'-', s.tglLahir||'-', s.telpon||'-']);
+        const row = ws.addRow([idx+1, s.nisn||'-', s.nama||'-', s.jenisKelamin||'-', s.agama||'-', s.kewarganegaraan||'WNI', s.kelas||'-', s.jurusan||'-', s.tglLahir||'-', s.telpon||'-']);
         row.height = 19;
         const bg = idx%2===0 ? 'FFEFF6FF' : 'FFFFFFFF';
         row.eachCell({includeEmpty:true}, (cell, c) => {
@@ -3581,9 +3730,13 @@ function App() {
             {g.fotoUrl ? <img src={g.fotoUrl} alt={g.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (g.avatar || '👨‍🏫')}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.namaPanggilan || g.nama}</p>
-            <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 1px', fontWeight: '600' }}>{g.mapel}</p>
-            <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>{g.jabatan}</p>
+            <p style={{ fontWeight: '800', fontSize: '14px', margin: '0 0 2px', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.namaPanggilan || g.nama}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '3px 0' }}>
+              {(g.mapelList?.length > 0 ? g.mapelList : g.mapel ? [g.mapel] : ['-']).map((m, i) => (
+                <span key={i} style={{ background: '#ede9fe', color: '#6d28d9', borderRadius: '6px', padding: '1px 7px', fontSize: '10px', fontWeight: '700' }}>{m}</span>
+              ))}
+            </div>
+            <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>{g.jabatan || 'Guru'}{g.bio ? ` · ${g.bio.slice(0,40)}${g.bio.length>40?'...':''}` : ''}</p>
           </div>
           <span style={{ color: '#94a3b8', fontSize: '18px' }}>›</span>
         </div>
@@ -3595,23 +3748,54 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to="daftarGuru" fn={() => { setSelectedProfile(null); goTo('daftarGuru'); }} />
-      <div style={{ width: '100%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', borderRadius: '20px', padding: '28px 20px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 24px rgba(220,38,38,0.3)' }}>
-        <div style={{ width: '84px', height: '84px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', margin: '0 auto 14px' }}>{selectedProfile.avatar || '👨‍🏫'}</div>
-        <p style={{ color: 'white', fontSize: '21px', fontWeight: '900', margin: '0 0 4px' }}>{selectedProfile.nama}</p>
-        {selectedProfile.namaPanggilan && selectedProfile.namaPanggilan !== selectedProfile.nama && <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', margin: '0 0 4px' }}>"{selectedProfile.namaPanggilan}"</p>}
-        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '14px', fontWeight: '700', margin: '0 0 4px' }}>{selectedProfile.mapel}</p>
-        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', margin: 0 }}>{selectedProfile.jabatan}</p>
-      </div>
-      <div style={{ ...S.card }}>
-        <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>📋 INFO GURU</p>
-        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '2.2' }}>
-          {selectedProfile.nip ? <p style={{ margin: 0 }}>🪪 NIP: <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedProfile.nip}</span></p> : <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>NIP: tidak ada (guru honorer)</p>}
-          {selectedProfile.telpon ? <p style={{ margin: 0 }}>📞 Telpon: <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedProfile.telpon}</span></p> : <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>Telpon: belum diisi</p>}
+
+      {/* Header kartu merah */}
+      <div style={{ width: '100%', background: 'linear-gradient(135deg,#dc2626,#991b1b)', borderRadius: '24px', padding: '28px 20px 20px', marginBottom: '14px', textAlign: 'center', boxShadow: '0 8px 28px rgba(220,38,38,0.35)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '140px', height: '140px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
+        <div style={{ width: '88px', height: '88px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', margin: '0 auto 14px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+          {selectedProfile.fotoUrl ? <img src={selectedProfile.fotoUrl} alt={selectedProfile.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (selectedProfile.avatar || '👨‍🏫')}
         </div>
+        <p style={{ color: 'white', fontSize: '20px', fontWeight: '900', margin: '0 0 3px', letterSpacing: '0.3px' }}>{selectedProfile.nama}</p>
+        {selectedProfile.namaPanggilan && selectedProfile.namaPanggilan !== selectedProfile.nama && (
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', margin: '0 0 8px', fontStyle: 'italic' }}>"{selectedProfile.namaPanggilan}"</p>
+        )}
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '10px' }}>
+          {(selectedProfile.mapelList?.length > 0 ? selectedProfile.mapelList : selectedProfile.mapel ? [selectedProfile.mapel] : []).map((m, i) => (
+            <span key={i} style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', fontWeight: '700', color: 'white' }}>{m}</span>
+          ))}
+        </div>
+        {selectedProfile.jabatan && <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px', margin: '8px 0 0', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: '600' }}>{selectedProfile.jabatan}</p>}
       </div>
-      <div style={{ ...S.card }}>
-        <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '13px', marginBottom: '10px', letterSpacing: '1px' }}>💬 BIO</p>
-        {selectedProfile.bio ? <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.7', margin: 0 }}>{selectedProfile.bio}</p> : <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Belum ada bio.</p>}
+
+      {/* Bio */}
+      {selectedProfile.bio && (
+        <div style={{ ...S.card, border: '1px solid #fecaca' }}>
+          <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '12px', marginBottom: '8px', letterSpacing: '1px', textTransform: 'uppercase' }}>💬 Bio</p>
+          <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.75', margin: 0 }}>{selectedProfile.bio}</p>
+        </div>
+      )}
+
+      {/* Info detail */}
+      <div style={{ ...S.card, border: '1px solid #fee2e2' }}>
+        <p style={{ color: '#dc2626', fontWeight: '700', fontSize: '12px', marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>📋 Informasi</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {[
+            { icon: '🪪', label: 'NIP', val: selectedProfile.nip || 'Guru Honorer (tidak ada NIP)' },
+            { icon: '🪪', label: 'NIK', val: selectedProfile.nik || '-' },
+            { icon: '🕌', label: 'Agama', val: selectedProfile.agama || '-' },
+            { icon: '🌏', label: 'Kewarganegaraan', val: selectedProfile.kewarganegaraan || 'WNI' },
+            { icon: '📞', label: 'Telepon', val: selectedProfile.telpon && selectedProfile.telpon !== '-' ? selectedProfile.telpon : 'Belum diisi' },
+            { icon: '📧', label: 'Email', val: selectedProfile.email && !selectedProfile.email.includes('@ejulu.sch.id') ? selectedProfile.email : 'Belum diisi' },
+          ].map(({ icon, label, val }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>{icon}</span>
+              <div>
+                <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '700', margin: '0 0 1px', letterSpacing: '0.8px', textTransform: 'uppercase' }}>{label}</p>
+                <p style={{ color: '#0f172a', fontSize: '13px', fontWeight: '600', margin: 0 }}>{val}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -3772,14 +3956,9 @@ function App() {
             </div>
           </div>
           <div style={{ background: 'white', borderRadius: '10px', padding: '10px', marginBottom: '12px', border: '1px solid #bfdbfe' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '6px' }}>
-              {['NISN','NIS','Nama Lengkap'].map(col => (
-                <div key={col} style={{ background: '#1e3a8a', color: 'white', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '700', textAlign: 'center' }}>{col}</div>
-              ))}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '8px' }}>
-              {['Kelas','Jurusan','Tgl Lahir'].map(col => (
-                <div key={col} style={{ background: '#eff6ff', color: '#2563eb', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '600', textAlign: 'center', border: '1px solid #bfdbfe' }}>{col}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '8px' }}>
+              {['NISN','Nama','Kelas','Jurusan'].map((col, i) => (
+                <div key={col} style={{ background: i < 2 ? '#1e3a8a' : '#eff6ff', color: i < 2 ? 'white' : '#2563eb', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '700', textAlign: 'center', border: i >= 2 ? '1px solid #bfdbfe' : 'none' }}>{col}</div>
               ))}
             </div>
             <div style={{ background: '#f0fdf4', borderRadius: '8px', padding: '8px 10px', border: '1px solid #bbf7d0' }}>
@@ -3824,7 +4003,7 @@ function App() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '600px' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    {['No','NISN','NIS','Nama','Kelas','Jurusan','Tgl Lahir','Status'].map(h => (
+                    {['No','NISN','Nama','Kelas','Jurusan','Status'].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
@@ -3834,11 +4013,9 @@ function App() {
                     <tr key={i}>
                       <td style={tdStyle(s.valid, i%2===0)}>{i+1}</td>
                       <td style={tdStyle(s.valid, i%2===0)}>{s.nisn || <span style={{color:'#ef4444'}}>❌</span>}</td>
-                      <td style={tdStyle(s.valid, i%2===0)}>{s.nis || '-'}</td>
-                      <td style={{...tdStyle(s.valid, i%2===0), textAlign:'left', maxWidth:'120px', overflow:'hidden', textOverflow:'ellipsis'}}>{s.nama || <span style={{color:'#ef4444'}}>❌ kosong</span>}</td>
+                      <td style={{...tdStyle(s.valid, i%2===0), textAlign:'left', maxWidth:'140px', overflow:'hidden', textOverflow:'ellipsis'}}>{s.nama || <span style={{color:'#ef4444'}}>❌ kosong</span>}</td>
                       <td style={tdStyle(s.valid, i%2===0)}>{s.kelas || <span style={{color:'#ef4444'}}>❌</span>}</td>
                       <td style={tdStyle(s.valid, i%2===0)}>{s.jurusan || <span style={{color:'#ef4444'}}>❌</span>}</td>
-                      <td style={tdStyle(s.valid, i%2===0)}>{s.tglLahir || '-'}</td>
                       <td style={{...tdStyle(s.valid, i%2===0), fontWeight:'700'}}>{s.valid ? '✅' : '❌'}</td>
                     </tr>
                   ))}
@@ -4003,6 +4180,110 @@ function App() {
     );
   }
 
+  // ── IMPORT GURU ────────────────────────────────────────────────────
+  if (page === 'importGuru') {
+    const validCount = importGuruPreview.filter(r => r.valid).length;
+    const invalidCount = importGuruPreview.filter(r => !r.valid).length;
+    const thStyle = { padding: '9px 8px', background: '#7c3aed', color: 'white', fontWeight: '700', fontSize: '11px', textAlign: 'center', borderRight: '1px solid #a78bfa', whiteSpace: 'nowrap' };
+    const tdStyle = (valid, even) => ({ padding: '7px 8px', fontSize: '11px', textAlign: 'center', background: !valid ? '#fef2f2' : even ? '#f5f3ff' : 'white', color: !valid ? '#ef4444' : '#0f172a', borderRight: '1px solid #ede9fe', borderBottom: '1px solid #ede9fe', whiteSpace: 'nowrap' });
+    return (
+      <div style={S.page}>
+        <TopBar />
+        <BackBtn to="adminDashboard" fn={() => goTo('adminDashboard')} />
+        <p style={{ color: '#7c3aed', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👨‍🏫 Import Massal Guru</p>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '16px' }}>Upload file Excel untuk mendaftarkan guru sekaligus</p>
+        {importGuruMsg && <div style={importGuruMsg.startsWith('✅') ? S.successBox : importGuruMsg.startsWith('❌') ? S.errBox : { ...S.successBox, background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' }}>{importGuruMsg}</div>}
+
+        {/* Kartu template */}
+        <div style={{ ...S.card, border: '1px solid #ede9fe', background: 'linear-gradient(135deg,#f5f3ff,#ede9fe)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📋</div>
+            <div>
+              <p style={{ color: '#5b21b6', fontWeight: '800', fontSize: '14px', margin: 0 }}>Template Excel Guru</p>
+              <p style={{ color: '#64748b', fontSize: '11px', margin: 0 }}>NIP / NIK wajib diisi minimal satu</p>
+            </div>
+          </div>
+          <div style={{ background: 'white', borderRadius: '10px', padding: '10px', marginBottom: '12px', border: '1px solid #ede9fe' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px', marginBottom: '5px' }}>
+              {['NIP','NIK','Nama Lengkap'].map(col => (
+                <div key={col} style={{ background: '#7c3aed', color: 'white', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '700', textAlign: 'center' }}>{col}</div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px' }}>
+              {['Nama Panggilan','Jabatan','Mapel Diampu'].map(col => (
+                <div key={col} style={{ background: '#f5f3ff', color: '#7c3aed', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '600', textAlign: 'center', border: '1px solid #ede9fe' }}>{col}</div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: '#f0fdf4', borderRadius: '8px', padding: '8px 10px', border: '1px solid #bbf7d0', marginBottom: '12px' }}>
+            <p style={{ color: '#15803d', fontSize: '11px', fontWeight: '700', margin: 0 }}>🔐 Password default semua guru: <span style={{ fontFamily: 'monospace', background: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>ejulu123</span></p>
+          </div>
+          <button onClick={downloadTemplateGuruExcel} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            📥 Download Template Excel Guru
+          </button>
+        </div>
+
+        {/* Upload */}
+        <div style={{ ...S.card, border: '2px dashed #a78bfa' }}>
+          <p style={{ color: '#7c3aed', fontWeight: '700', fontSize: '14px', marginBottom: '10px' }}>📤 Upload File Excel</p>
+          <label style={{ width: '100%', padding: '18px', borderRadius: '12px', border: '1.5px dashed #a78bfa', background: '#f5f3ff', color: '#7c3aed', fontSize: '13px', fontWeight: '700', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '28px' }}>{importGuruLoading ? '⏳' : '📂'}</span>
+            {importGuruLoading ? 'Sedang mengimport...' : 'Pilih File .xlsx'}
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>File Excel dari template yang sudah diisi</span>
+            <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportGuruExcel} disabled={importGuruLoading} />
+          </label>
+        </div>
+
+        {/* Preview tabel */}
+        {importGuruPreview.length > 0 && (
+          <div style={{ ...S.card, border: '1px solid #ddd6fe', padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg,#f5f3ff,#ede9fe)', borderBottom: '1px solid #ddd6fe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ color: '#5b21b6', fontWeight: '800', fontSize: '14px', margin: 0 }}>👁️ Preview Data</p>
+                <p style={{ color: '#64748b', fontSize: '11px', margin: '2px 0 0' }}>
+                  <span style={{ color: '#7c3aed', fontWeight: '700' }}>{validCount} valid</span>
+                  {invalidCount > 0 && <span style={{ color: '#ef4444', fontWeight: '700' }}> · {invalidCount} bermasalah</span>}
+                </p>
+              </div>
+              <div style={{ background: validCount === importGuruPreview.length ? '#7c3aed' : '#f59e0b', color: 'white', borderRadius: '20px', padding: '4px 12px', fontSize: '11px', fontWeight: '700' }}>
+                {validCount === importGuruPreview.length ? '✅ Semua OK' : '⚠️ Ada masalah'}
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: '260px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '500px' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                  <tr>
+                    {['No','NIP','NIK','Nama','Mapel','Status'].map(h => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {importGuruPreview.map((g, i) => (
+                    <tr key={i}>
+                      <td style={tdStyle(g.valid, i%2===0)}>{i+1}</td>
+                      <td style={tdStyle(g.valid, i%2===0)}>{g.nip || <span style={{color:'#94a3b8',fontSize:'10px'}}>-</span>}</td>
+                      <td style={tdStyle(g.valid, i%2===0)}>{g.nik || <span style={{color:'#94a3b8',fontSize:'10px'}}>-</span>}</td>
+                      <td style={{...tdStyle(g.valid, i%2===0), textAlign:'left', maxWidth:'130px', overflow:'hidden', textOverflow:'ellipsis'}}>{g.nama || <span style={{color:'#ef4444'}}>❌</span>}</td>
+                      <td style={{...tdStyle(g.valid, i%2===0), textAlign:'left'}}>{g.mapelList?.join(', ') || g.mapel || '-'}</td>
+                      <td style={{...tdStyle(g.valid, i%2===0), fontWeight:'700'}}>{g.valid ? '✅' : '❌'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+              <button onClick={mulaiImportGuru} disabled={importGuruLoading || validCount === 0} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
+                {importGuruLoading ? '⏳ Mengimport...' : `🚀 Import ${validCount} Guru Sekarang`}
+              </button>
+              <p style={{ color: '#94a3b8', fontSize: '11px', textAlign: 'center', margin: 0 }}>⚠️ Proses ini tidak bisa dibatalkan.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── GANTI PASSWORD PERTAMA KALI ───────────────────────────────────
   if (page === 'gantiPasswordPertama') return (
     <div style={S.page}>
@@ -4045,18 +4326,27 @@ function App() {
   if (page === 'lengkapiProfil') return (
     <div style={S.page}>
       <TopBar />
-      <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '16px', boxShadow: '0 8px 24px rgba(14,165,233,0.3)' }}>📋</div>
-      <p style={{ color: '#0284c7', fontSize: '20px', fontWeight: '900', marginBottom: '4px', textAlign: 'center' }}>Lengkapi Profil</p>
-      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', textAlign: 'center' }}>Isi data diri kamu agar profil lengkap</p>
+      <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: userRole === 'guru' ? 'linear-gradient(135deg,#dc2626,#b91c1c)' : 'linear-gradient(135deg,#0ea5e9,#0284c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '16px', boxShadow: userRole === 'guru' ? '0 8px 24px rgba(220,38,38,0.3)' : '0 8px 24px rgba(14,165,233,0.3)' }}>{userRole === 'guru' ? '👨‍🏫' : '📋'}</div>
+      <p style={{ color: userRole === 'guru' ? '#dc2626' : '#0284c7', fontSize: '20px', fontWeight: '900', marginBottom: '4px', textAlign: 'center' }}>Lengkapi Profil</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', textAlign: 'center' }}>Hai {userData?.namaPanggilan || userData?.nama?.split(' ')[0]}! Isi data diri agar profil lengkap</p>
 
       {lengkapMsg && <div style={lengkapMsg.startsWith('✅') ? S.successBox : S.errBox}>{lengkapMsg}</div>}
 
-      <div style={{ ...S.card, border: '1px solid #bae6fd', width: '100%' }}>
+      <div style={{ ...S.card, border: `1px solid ${userRole === 'guru' ? '#fecaca' : '#bae6fd'}`, width: '100%' }}>
+
+        {/* Nama Panggilan — khusus guru */}
+        {userRole === 'guru' && (
+          <>
+            <label style={S.label}>Nama Panggilan</label>
+            <input style={S.input} placeholder="Contoh: Pak Budi / Bu Siti" value={lengkapForm.namaPanggilan} onChange={e => setLengkapForm(p => ({ ...p, namaPanggilan: e.target.value }))} />
+          </>
+        )}
+
         <label style={S.label}>Jenis Kelamin *</label>
         <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
           {['Laki-laki','Perempuan'].map(jk => (
             <button key={jk} onClick={() => setLengkapForm(p => ({ ...p, jenisKelamin: jk }))}
-              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `2px solid ${lengkapForm.jenisKelamin === jk ? '#0284c7' : '#e2e8f0'}`, background: lengkapForm.jenisKelamin === jk ? '#eff6ff' : 'white', color: lengkapForm.jenisKelamin === jk ? '#0284c7' : '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `2px solid ${lengkapForm.jenisKelamin === jk ? (userRole==='guru'?'#dc2626':'#0284c7') : '#e2e8f0'}`, background: lengkapForm.jenisKelamin === jk ? (userRole==='guru'?'#fff1f2':'#eff6ff') : 'white', color: lengkapForm.jenisKelamin === jk ? (userRole==='guru'?'#dc2626':'#0284c7') : '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
               {jk === 'Laki-laki' ? '👦 Laki-laki' : '👧 Perempuan'}
             </button>
           ))}
@@ -4078,10 +4368,18 @@ function App() {
 
         <label style={S.label}>Nomor Telepon / HP *</label>
         <input style={S.input} type="tel" placeholder="08xxxxxxxxxx" value={lengkapForm.telpon} onChange={e => setLengkapForm(p => ({ ...p, telpon: e.target.value }))} />
+
+        {/* Bio — khusus guru, wajib */}
+        {userRole === 'guru' && (
+          <>
+            <label style={S.label}>Bio Singkat * <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '11px' }}>(tampil di profil publik)</span></label>
+            <textarea style={{ ...S.input, height: '90px', resize: 'none' }} placeholder="Contoh: Guru Matematika dengan pengalaman 10 tahun. Senang membantu siswa memahami konsep dengan cara yang menyenangkan..." value={lengkapForm.bio} onChange={e => setLengkapForm(p => ({ ...p, bio: e.target.value }))} />
+          </>
+        )}
       </div>
 
-      <button onClick={simpanLengkapProfil} disabled={lengkapLoading} style={{ width: '100%', padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer', boxShadow: '0 4px 14px rgba(14,165,233,0.3)' }}>
-        {lengkapLoading ? '⏳ Menyimpan...' : '✅ Simpan & Mulai Belajar'}
+      <button onClick={simpanLengkapProfil} disabled={lengkapLoading} style={{ width: '100%', padding: '15px', borderRadius: '14px', border: 'none', background: userRole === 'guru' ? 'linear-gradient(135deg,#dc2626,#b91c1c)' : 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer', boxShadow: userRole === 'guru' ? '0 4px 14px rgba(220,38,38,0.3)' : '0 4px 14px rgba(14,165,233,0.3)' }}>
+        {lengkapLoading ? '⏳ Menyimpan...' : userRole === 'guru' ? '✅ Simpan & Mulai Mengajar' : '✅ Simpan & Mulai Belajar'}
       </button>
     </div>
   );
