@@ -184,6 +184,17 @@ function App() {
   // #12 File materi Google Drive per bab (field fileDrive di dokumen bab)
   const [linkEditDrive, setLinkEditDrive] = useState('');
 
+  // Ganti password pertama kali & lengkapi profil
+  const [gantiPassBaru, setGantiPassBaru] = useState('');
+  const [gantiPassKonfirm, setGantiPassKonfirm] = useState('');
+  const [gantiPassMsg, setGantiPassMsg] = useState('');
+  const [gantiPassLoading, setGantiPassLoading] = useState(false);
+  const [showGantiPass, setShowGantiPass] = useState(false);
+  const [showGantiPassKonfirm, setShowGantiPassKonfirm] = useState(false);
+  const [lengkapForm, setLengkapForm] = useState({ jenisKelamin: '', agama: 'Islam', kewarganegaraan: 'WNI', email: '', telpon: '' });
+  const [lengkapMsg, setLengkapMsg] = useState('');
+  const [lengkapLoading, setLengkapLoading] = useState(false);
+
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
   const mapelList = [
@@ -227,7 +238,7 @@ function App() {
     const stack = pageStack.current;
     const cur = stack[stack.length - 1];
     // Halaman exit point: jangan pop, tahan di sini
-    if (cur === 'splash' || cur === 'dashboard' || stack.length <= 1) {
+    if (cur === 'splash' || cur === 'dashboard' || cur === 'gantiPasswordPertama' || cur === 'lengkapiProfil' || stack.length <= 1) {
       window.history.pushState({ p: 'hold' }, '', window.location.href);
       return;
     }
@@ -580,7 +591,10 @@ function App() {
       const siswaData = docSnap.data();
       if (siswaData.status === 'pending') { await signOut(auth); setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
       if (siswaData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
-      setUserData(siswaData); setUserRole('siswa'); goTo('dashboard');
+      setUserData(siswaData); setUserRole('siswa');
+      if (!siswaData.passwordChanged) { goTo('gantiPasswordPertama'); }
+      else if (!siswaData.profileComplete) { setLengkapForm({ jenisKelamin: siswaData.jenisKelamin||'', agama: siswaData.agama||'Islam', kewarganegaraan: siswaData.kewarganegaraan||'WNI', email: siswaData.email||'', telpon: siswaData.telpon||'' }); goTo('lengkapiProfil'); }
+      else goTo('dashboard');
     } catch (e) { setLoginError('NISN atau password salah!'); }
     setLoading(false);
   };
@@ -597,7 +611,10 @@ function App() {
       const guruData = docSnap.data();
       if (guruData.status === 'pending') { await signOut(auth); setLoginError('Akun belum disetujui admin!'); setLoading(false); return; }
       if (guruData.status === 'rejected') { await signOut(auth); setLoginError('Akun ditolak.'); setLoading(false); return; }
-      setUserData(guruData); setUserRole('guru'); goTo('dashboard');
+      setUserData(guruData); setUserRole('guru');
+      if (!guruData.passwordChanged) { goTo('gantiPasswordPertama'); }
+      else if (!guruData.profileComplete) { setLengkapForm({ jenisKelamin: guruData.jenisKelamin||'', agama: guruData.agama||'Islam', kewarganegaraan: guruData.kewarganegaraan||'WNI', email: guruData.email||'', telpon: guruData.telpon||'' }); goTo('lengkapiProfil'); }
+      else goTo('dashboard');
     } catch (e) { setLoginError('NIP/NIK atau password salah!'); }
     setLoading(false);
   };
@@ -1371,6 +1388,52 @@ function App() {
     setKalenderList(prev => prev.filter(k => k.id !== id));
   };
 
+  // ── Ganti password pertama kali ──────────────────────────────────
+  const submitGantiPasswordPertama = async () => {
+    if (!gantiPassBaru || gantiPassBaru.length < 6) { setGantiPassMsg('❌ Password minimal 6 karakter!'); return; }
+    if (gantiPassBaru === 'ejulu123') { setGantiPassMsg('❌ Password baru tidak boleh sama dengan password default!'); return; }
+    if (gantiPassBaru !== gantiPassKonfirm) { setGantiPassMsg('❌ Konfirmasi password tidak cocok!'); return; }
+    setGantiPassLoading(true);
+    try {
+      const user = auth.currentUser;
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      // Re-auth dengan password lama (ejulu123)
+      const defaultPass = userRole === 'guru' ? userData?.defaultPassword || 'ejulu123' : 'ejulu123';
+      const cred = EmailAuthProvider.credential(user.email, defaultPass);
+      await reauthenticateWithCredential(user, cred);
+      await updatePassword(user, gantiPassBaru);
+      await updateDoc(doc(db, 'users', userData.uid), { passwordChanged: true });
+      setUserData(prev => ({ ...prev, passwordChanged: true }));
+      setGantiPassBaru(''); setGantiPassKonfirm(''); setGantiPassMsg('');
+      // Langsung ke lengkapi profil
+      setLengkapForm({ jenisKelamin: userData?.jenisKelamin||'', agama: userData?.agama||'Islam', kewarganegaraan: userData?.kewarganegaraan||'WNI', email: userData?.email||'', telpon: userData?.telpon||'' });
+      goTo('lengkapiProfil');
+    } catch (e) {
+      setGantiPassMsg('❌ Gagal ganti password: ' + (e.code === 'auth/wrong-password' ? 'Autentikasi gagal, coba logout dan login ulang.' : e.message));
+    }
+    setGantiPassLoading(false);
+  };
+
+  const simpanLengkapProfil = async () => {
+    if (!lengkapForm.jenisKelamin) { setLengkapMsg('❌ Jenis kelamin wajib dipilih!'); return; }
+    if (!lengkapForm.email || !lengkapForm.email.includes('@')) { setLengkapMsg('❌ Email aktif wajib diisi!'); return; }
+    if (!lengkapForm.telpon || lengkapForm.telpon.length < 8) { setLengkapMsg('❌ Nomor telepon tidak valid!'); return; }
+    setLengkapLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', userData.uid), {
+        jenisKelamin: lengkapForm.jenisKelamin,
+        agama: lengkapForm.agama,
+        kewarganegaraan: lengkapForm.kewarganegaraan,
+        email: lengkapForm.email,
+        telpon: lengkapForm.telpon,
+        profileComplete: true,
+      });
+      setUserData(prev => ({ ...prev, ...lengkapForm, profileComplete: true }));
+      goTo('dashboard');
+    } catch (e) { setLengkapMsg('❌ Gagal simpan: ' + e.message); }
+    setLengkapLoading(false);
+  };
+
   // ── Badge pesan belum dibaca ───────────────────────────────────
   const loadPesanBadge = async () => {
     if (!userData || userRole !== 'siswa') return;
@@ -1421,36 +1484,31 @@ function App() {
         if (data.length < 2) { setImportMsg('❌ File kosong atau tidak ada data.'); return; }
         const headerRow = data[0].map(h => String(h).toLowerCase().trim());
         const iNISN = headerRow.findIndex(h => h.includes('nisn'));
-        const iNIS  = headerRow.findIndex(h => h === 'nis' || h.includes('nis'));
+        const iNIS  = headerRow.findIndex(h => h === 'nis' || (h.includes('nis') && !h.includes('nisn')));
         const iNama = headerRow.findIndex(h => h.includes('nama'));
-        const iEmail = headerRow.findIndex(h => h.includes('email'));
-        const iPass = headerRow.findIndex(h => h.includes('pass') || h.includes('sandi'));
         const iKelas = headerRow.findIndex(h => h.includes('kelas'));
         const iJurusan = headerRow.findIndex(h => h.includes('jurusan'));
         const iTgl = headerRow.findIndex(h => h.includes('tgl') || h.includes('lahir') || h.includes('tanggal'));
-        const iAgama = headerRow.findIndex(h => h.includes('agama'));
-        const iTelp = headerRow.findIndex(h => h.includes('telp') || h.includes('hp') || h.includes('phone'));
         if (iNISN === -1 || iNama === -1) {
           setImportMsg('❌ Kolom NISN dan Nama wajib ada. Gunakan template yang disediakan.'); return;
         }
         const rows = data.slice(1).map(cols => {
           const nisn = String(cols[iNISN] || '').trim();
           const nis  = iNIS  >= 0 ? String(cols[iNIS]  || '').trim() : '';
-          const nama = iNama  >= 0 ? String(cols[iNama] || '').trim() : '';
-          const email = iEmail >= 0 ? String(cols[iEmail] || '').trim() : '';
-          const password = iPass >= 0 ? String(cols[iPass] || '').trim() || nisn : nisn;
+          const nama = iNama >= 0 ? String(cols[iNama] || '').trim() : '';
           const kelas = iKelas >= 0 ? String(cols[iKelas] || '').trim() : '';
           const jurusan = iJurusan >= 0 ? String(cols[iJurusan] || '').trim() : '';
           const tglLahir = iTgl >= 0 ? String(cols[iTgl] || '').trim() : '';
-          const agama = iAgama >= 0 ? String(cols[iAgama] || '').trim() || 'Islam' : 'Islam';
-          const telpon = iTelp >= 0 ? String(cols[iTelp] || '').trim() || '-' : '-';
-          const valid = !!(nisn && nama && email && kelas && jurusan);
-          return { nisn, nis, nama, email, password, kelas, jurusan, tglLahir, agama, telpon, valid };
+          // Email dibuat otomatis dari NISN, password default ejulu123
+          const email = nisn + '@ejulu.sch.id';
+          const password = 'ejulu123';
+          const valid = !!(nisn && nama && kelas && jurusan);
+          return { nisn, nis, nama, email, password, kelas, jurusan, tglLahir, agama: 'Islam', telpon: '-', valid };
         }).filter(r => r.nisn);
         setImportPreview(rows);
         const validCount = rows.filter(r => r.valid).length;
         const invalidCount = rows.filter(r => !r.valid).length;
-        setImportMsg(`📋 ${validCount} siswa siap diimport${invalidCount > 0 ? `, ${invalidCount} baris bermasalah (ditandai merah)` : ''}. Cek preview lalu klik Mulai Import.`);
+        setImportMsg(`📋 ${validCount} siswa siap diimport${invalidCount > 0 ? `, ${invalidCount} baris bermasalah` : ''}. Password default: ejulu123`);
       } catch(err) {
         setImportMsg('❌ Gagal membaca file: ' + err.message);
       }
@@ -1470,7 +1528,9 @@ function App() {
         await setDoc(doc(db, 'users', cred.user.uid), {
           uid: cred.user.uid, role: 'siswa', status: 'approved',
           nisn: s.nisn, nis: s.nis || '', nama: s.nama, email: s.email, kelas: s.kelas,
-          jurusan: s.jurusan, tglLahir: s.tglLahir, agama: s.agama, telpon: s.telpon,
+          jurusan: s.jurusan, tglLahir: s.tglLahir, agama: 'Islam', telpon: '-',
+          jenisKelamin: '', kewarganegaraan: 'WNI',
+          passwordChanged: false, profileComplete: false,
           citaCita: '', hobby: '', bio: '', fotoUrl: '', avatar: '🎓',
           poinPG: 0, poinEssay: 0, poinModul: 0, totalPoin: 0, pelanggaran: 0, createdAt: new Date()
         });
@@ -1505,14 +1565,10 @@ function App() {
     ws.columns = [
       { header: 'NISN',      key: 'nisn',     width: 16 },
       { header: 'NIS',       key: 'nis',      width: 12 },
-      { header: 'Nama',      key: 'nama',     width: 26 },
-      { header: 'Email',     key: 'email',    width: 30 },
-      { header: 'Password',  key: 'pass',     width: 16 },
+      { header: 'Nama',      key: 'nama',     width: 28 },
       { header: 'Kelas',     key: 'kelas',    width: 8  },
       { header: 'Jurusan',   key: 'jurusan',  width: 10 },
       { header: 'Tgl Lahir', key: 'tgl',      width: 14 },
-      { header: 'Agama',     key: 'agama',    width: 12 },
-      { header: 'Telpon',    key: 'telp',     width: 18 },
     ];
 
     // Style baris header (baris 1)
@@ -1532,11 +1588,11 @@ function App() {
 
     // Data contoh
     const contoh = [
-      { nisn:'1234567890', nis:'12345', nama:'Budi Santoso',  email:'budi@gmail.com',  pass:'budi1234',  kelas:'10', jurusan:'A', tgl:'2006-01-15', agama:'Islam', telp:'08123456789' },
-      { nisn:'0987654321', nis:'67890', nama:'Siti Aminah',   email:'siti@gmail.com',  pass:'siti1234',  kelas:'10', jurusan:'B', tgl:'2007-03-22', agama:'Islam', telp:'08987654321' },
-      { nisn:'1122334455', nis:'11223', nama:'Ahmad Fauzi',   email:'ahmad@gmail.com', pass:'ahmad1234', kelas:'11', jurusan:'A', tgl:'2005-07-10', agama:'Islam', telp:'08567891234' },
-      { nisn:'5544332211', nis:'55443', nama:'Dewi Rahayu',   email:'dewi@gmail.com',  pass:'dewi1234',  kelas:'11', jurusan:'B', tgl:'2005-11-28', agama:'Kristen', telp:'08234567890' },
-      { nisn:'9988776655', nis:'99887', nama:'Rizki Pratama', email:'rizki@gmail.com', pass:'rizki1234', kelas:'12', jurusan:'A', tgl:'2004-04-05', agama:'Islam', telp:'08876543219' },
+      { nisn:'1234567890', nis:'12345', nama:'Budi Santoso',  kelas:'10', jurusan:'A', tgl:'2006-01-15' },
+      { nisn:'0987654321', nis:'67890', nama:'Siti Aminah',   kelas:'10', jurusan:'B', tgl:'2007-03-22' },
+      { nisn:'1122334455', nis:'11223', nama:'Ahmad Fauzi',   kelas:'11', jurusan:'A', tgl:'2005-07-10' },
+      { nisn:'5544332211', nis:'55443', nama:'Dewi Rahayu',   kelas:'11', jurusan:'B', tgl:'2005-11-28' },
+      { nisn:'9988776655', nis:'99887', nama:'Rizki Pratama', kelas:'12', jurusan:'A', tgl:'2004-04-05' },
     ];
 
     const borderThin = {
@@ -1577,9 +1633,9 @@ function App() {
 
     // Baris keterangan di bawah
     ws.addRow([]);
-    const noteRow = ws.addRow(['* Kolom wajib: NISN, Nama, Email, Kelas, Jurusan. Password default = NISN jika dikosongkan.']);
+    const noteRow = ws.addRow(['* Kolom wajib: NISN, Nama, Kelas, Jurusan. Password login otomatis: ejulu123. Siswa wajib ganti password saat pertama login.']);
     noteRow.getCell(1).font = { italic: true, color: { argb: 'FF64748B' }, size: 9 };
-    ws.mergeCells(`A${noteRow.number}:J${noteRow.number}`);
+    ws.mergeCells(`A${noteRow.number}:F${noteRow.number}`);
 
     // Download
     const buf = await wb.xlsx.writeBuffer();
@@ -2289,7 +2345,9 @@ function App() {
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '32px' }}>SMA Negeri 1 Lumbanjulu</p>
       <img src="/logo_sekolah.png" alt="Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '32px', borderRadius: '50%', boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }} />
       <button style={S.btnTeal} onClick={() => { setLoginError(''); goTo('loginSiswa'); }}><span style={{ fontSize: '24px' }}>👤</span><span>LOGIN SISWA</span></button>
-      <button style={S.btnGold} onClick={() => goTo('registerSiswa')}><span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR SISWA BARU</span></button>
+      <div style={{ marginTop: '16px', padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', width: '100%' }}>
+        <p style={{ color: '#92400e', fontSize: '12px', margin: 0, textAlign: 'center', fontWeight: '600' }}>🔒 Pendaftaran hanya melalui admin sekolah</p>
+      </div>
     </div>
   );
 
@@ -2301,7 +2359,9 @@ function App() {
       <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '32px' }}>SMA Negeri 1 Lumbanjulu</p>
       <img src="/logo_sekolah.png" alt="Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '32px', borderRadius: '50%', boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }} />
       <button style={S.btnTeal} onClick={() => { setLoginError(''); goTo('loginGuru'); }}><span style={{ fontSize: '24px' }}>👨‍🏫</span><span>LOGIN GURU</span></button>
-      <button style={S.btnGold} onClick={() => goTo('registerGuru')}><span style={{ fontSize: '24px' }}>📝</span><span>DAFTAR GURU BARU</span></button>
+      <div style={{ marginTop: '16px', padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', width: '100%' }}>
+        <p style={{ color: '#92400e', fontSize: '12px', margin: 0, textAlign: 'center', fontWeight: '600' }}>🔒 Pendaftaran hanya melalui admin sekolah</p>
+      </div>
     </div>
   );
 
@@ -3289,11 +3349,76 @@ function App() {
     </div>
   );
 
-  if (page === 'daftarSiswaList') return (
+  if (page === 'daftarSiswaList') {
+    const downloadDaftarSiswaExcel = async () => {
+      await loadExcelJS();
+      const ExcelJS = window.ExcelJS;
+      const wb = new ExcelJS.Workbook(); wb.creator = 'E-JULU';
+      const ws = wb.addWorksheet(`Kelas ${daftarSiswaTingkat}${daftarSiswaJurusan}`, { views: [{ state: 'frozen', ySplit: 2 }] });
+      // Baris judul
+      ws.mergeCells('A1:K1');
+      const title = ws.getCell('A1');
+      title.value = `DAFTAR SISWA KELAS ${daftarSiswaTingkat}${daftarSiswaJurusan} — SMA NEGERI 1 LUMBANJULU`;
+      title.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' }, name: 'Calibri' };
+      title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      title.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 30;
+      ws.columns = [
+        { key:'no',     width: 5  }, { key:'nisn',   width: 14 }, { key:'nis',    width: 10 },
+        { key:'nama',   width: 28 }, { key:'jk',     width: 12 }, { key:'agama',  width: 12 },
+        { key:'kwn',    width: 8  }, { key:'kelas',  width: 8  }, { key:'jurusan',width: 9  },
+        { key:'tgl',    width: 13 }, { key:'telpon', width: 16 },
+      ];
+      const hRow = ws.addRow(['No','NISN','NIS','Nama Lengkap','Jenis Kelamin','Agama','WN','Kelas','Jurusan','Tgl Lahir','No. Telepon']);
+      hRow.height = 22;
+      hRow.eachCell(cell => {
+        cell.font = { bold:true, color:{argb:'FFFFFFFF'}, size:10, name:'Calibri' };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1D4ED8'} };
+        cell.alignment = { horizontal:'center', vertical:'middle' };
+        cell.border = { top:{style:'thin',color:{argb:'FF93C5FD'}}, left:{style:'thin',color:{argb:'FF93C5FD'}}, bottom:{style:'medium',color:{argb:'FFBFDBFE'}}, right:{style:'thin',color:{argb:'FF93C5FD'}} };
+      });
+      const border = { top:{style:'thin',color:{argb:'FFBFDBFE'}}, left:{style:'thin',color:{argb:'FFBFDBFE'}}, bottom:{style:'thin',color:{argb:'FFBFDBFE'}}, right:{style:'thin',color:{argb:'FFBFDBFE'}} };
+      let laki = 0, perempuan = 0;
+      daftarSiswaList.forEach((s, idx) => {
+        if (s.jenisKelamin === 'Laki-laki') laki++;
+        else if (s.jenisKelamin === 'Perempuan') perempuan++;
+        const row = ws.addRow([idx+1, s.nisn||'-', s.nis||'-', s.nama||'-', s.jenisKelamin||'-', s.agama||'-', s.kewarganegaraan||'WNI', s.kelas||'-', s.jurusan||'-', s.tglLahir||'-', s.telpon||'-']);
+        row.height = 19;
+        const bg = idx%2===0 ? 'FFEFF6FF' : 'FFFFFFFF';
+        row.eachCell({includeEmpty:true}, (cell, c) => {
+          cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+          cell.font = { size:10, name:'Calibri' };
+          cell.alignment = { horizontal: c===4 ? 'left' : 'center', vertical:'middle' };
+          cell.border = border;
+        });
+      });
+      // Baris ringkasan L/P
+      ws.addRow([]);
+      const totalRow = ws.addRow([`Total Siswa: ${daftarSiswaList.length}`, '', '', '', `Laki-laki: ${laki}`, `Perempuan: ${perempuan}`, '', '', '', '', '']);
+      [1,5,6].forEach(c => {
+        const cell = totalRow.getCell(c);
+        cell.font = { bold:true, size:10, color:{argb:'FF1E3A8A'} };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFDBEAFE'} };
+        cell.border = border;
+      });
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href=url; a.download=`Daftar_Siswa_Kelas${daftarSiswaTingkat}${daftarSiswaJurusan}_EJULU.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+    };
+    return (
     <div style={S.page}>
       <TopBar />
       <BackBtn to="daftarSiswaKelas" />
-      <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>👥 Kelas {daftarSiswaTingkat}{daftarSiswaJurusan}</p>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', width:'100%', marginBottom:'2px' }}>
+        <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', margin: 0 }}>👥 Kelas {daftarSiswaTingkat}{daftarSiswaJurusan}</p>
+        {!daftarLoading && daftarSiswaList.length > 0 && (
+          <button onClick={downloadDaftarSiswaExcel} style={{ padding:'8px 14px', borderRadius:'10px', border:'none', background:'linear-gradient(135deg,#16a34a,#15803d)', color:'white', fontWeight:'700', fontSize:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', flexShrink:0 }}>
+            📥 Excel
+          </button>
+        )}
+      </div>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '10px' }}>{daftarLoading ? 'Memuat...' : `${daftarSiswaList.length} siswa · urut poin tertinggi`}</p>
       <input style={{ ...S.input, marginBottom: '12px' }} placeholder="🔍 Cari nama atau NISN..." value={searchSiswa} onChange={e => setSearchSiswa(e.target.value)} />
       {daftarLoading && <LoadingSpinner />}
@@ -3325,7 +3450,8 @@ function App() {
         );
       })()}
     </div>
-  );
+    );
+  }
 
   if (page === 'leaderboard') return (
     <div style={S.page}>
@@ -3646,15 +3772,18 @@ function App() {
             </div>
           </div>
           <div style={{ background: 'white', borderRadius: '10px', padding: '10px', marginBottom: '12px', border: '1px solid #bfdbfe' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px', marginBottom: '6px' }}>
-              {['NISN','NIS','Nama','Email','Password'].map(col => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '6px' }}>
+              {['NISN','NIS','Nama Lengkap'].map(col => (
                 <div key={col} style={{ background: '#1e3a8a', color: 'white', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '700', textAlign: 'center' }}>{col}</div>
               ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-              {['Kelas','Jurusan','Tgl Lahir','Agama','Telpon'].map(col => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '8px' }}>
+              {['Kelas','Jurusan','Tgl Lahir'].map(col => (
                 <div key={col} style={{ background: '#eff6ff', color: '#2563eb', borderRadius: '6px', padding: '5px 4px', fontSize: '10px', fontWeight: '600', textAlign: 'center', border: '1px solid #bfdbfe' }}>{col}</div>
               ))}
+            </div>
+            <div style={{ background: '#f0fdf4', borderRadius: '8px', padding: '8px 10px', border: '1px solid #bbf7d0' }}>
+              <p style={{ color: '#15803d', fontSize: '11px', fontWeight: '700', margin: 0 }}>🔐 Password default semua siswa: <span style={{ fontFamily: 'monospace', background: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>ejulu123</span></p>
             </div>
           </div>
           <button onClick={downloadTemplateExcel} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#1e3a8a,#2563eb)', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -3668,7 +3797,7 @@ function App() {
           <label style={{ width: '100%', padding: '18px', borderRadius: '12px', border: '1.5px dashed #93c5fd', background: '#eff6ff', color: '#2563eb', fontSize: '13px', fontWeight: '700', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '28px' }}>{importLoading ? '⏳' : '📂'}</span>
             {importLoading ? 'Sedang mengimport...' : 'Pilih File .xlsx'}
-            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>File Excel dari template yang sudah diisi</span>
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>Kolom: NISN, NIS, Nama, Kelas, Jurusan, Tgl Lahir</span>
             <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportExcel} disabled={importLoading} />
           </label>
         </div>
@@ -3695,7 +3824,7 @@ function App() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '600px' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    {['No','NISN','NIS','Nama','Kelas','Jurusan','Agama','Status'].map(h => (
+                    {['No','NISN','NIS','Nama','Kelas','Jurusan','Tgl Lahir','Status'].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
@@ -3709,7 +3838,7 @@ function App() {
                       <td style={{...tdStyle(s.valid, i%2===0), textAlign:'left', maxWidth:'120px', overflow:'hidden', textOverflow:'ellipsis'}}>{s.nama || <span style={{color:'#ef4444'}}>❌ kosong</span>}</td>
                       <td style={tdStyle(s.valid, i%2===0)}>{s.kelas || <span style={{color:'#ef4444'}}>❌</span>}</td>
                       <td style={tdStyle(s.valid, i%2===0)}>{s.jurusan || <span style={{color:'#ef4444'}}>❌</span>}</td>
-                      <td style={tdStyle(s.valid, i%2===0)}>{s.agama || '-'}</td>
+                      <td style={tdStyle(s.valid, i%2===0)}>{s.tglLahir || '-'}</td>
                       <td style={{...tdStyle(s.valid, i%2===0), fontWeight:'700'}}>{s.valid ? '✅' : '❌'}</td>
                     </tr>
                   ))}
@@ -3873,6 +4002,89 @@ function App() {
       </div>
     );
   }
+
+  // ── GANTI PASSWORD PERTAMA KALI ───────────────────────────────────
+  if (page === 'gantiPasswordPertama') return (
+    <div style={S.page}>
+      <TopBar />
+      <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '16px', boxShadow: '0 8px 24px rgba(124,58,237,0.3)' }}>🔐</div>
+      <p style={{ color: '#7c3aed', fontSize: '20px', fontWeight: '900', marginBottom: '4px', textAlign: 'center' }}>Ganti Password</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', textAlign: 'center' }}>Halo {userData?.nama?.split(' ')[0]}! Buat password baru sebelum mulai.</p>
+
+      {gantiPassMsg && <div style={gantiPassMsg.startsWith('✅') ? S.successBox : S.errBox}>{gantiPassMsg}</div>}
+
+      <div style={{ ...S.card, border: '2px solid #ede9fe', width: '100%' }}>
+        <label style={S.label}>Password Baru</label>
+        <div style={S.pwWrap}>
+          <input style={{ ...S.input, marginBottom: 0, paddingRight: '40px' }} type={showGantiPass ? 'text' : 'password'} placeholder="Minimal 6 karakter" value={gantiPassBaru} onChange={e => setGantiPassBaru(e.target.value)} />
+          <button type="button" style={S.eyeBtn} onClick={() => setShowGantiPass(v => !v)}>{showGantiPass ? '🙈' : '👁️'}</button>
+        </div>
+        <div style={{ height: '12px' }} />
+        <label style={S.label}>Konfirmasi Password Baru</label>
+        <div style={S.pwWrap}>
+          <input style={{ ...S.input, marginBottom: 0, paddingRight: '40px' }} type={showGantiPassKonfirm ? 'text' : 'password'} placeholder="Ulangi password baru" value={gantiPassKonfirm} onChange={e => setGantiPassKonfirm(e.target.value)} />
+          <button type="button" style={S.eyeBtn} onClick={() => setShowGantiPassKonfirm(v => !v)}>{showGantiPassKonfirm ? '🙈' : '👁️'}</button>
+        </div>
+      </div>
+
+      <button onClick={submitGantiPasswordPertama} disabled={gantiPassLoading} style={{ width: '100%', padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer', marginBottom: '16px', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>
+        {gantiPassLoading ? '⏳ Menyimpan...' : '🔐 Simpan Password Baru'}
+      </button>
+
+      {/* Peringatan penting */}
+      <div style={{ width: '100%', background: '#fffbeb', border: '1.5px solid #fcd34d', borderRadius: '14px', padding: '14px 16px' }}>
+        <p style={{ color: '#92400e', fontSize: '12px', fontWeight: '700', margin: '0 0 6px' }}>⚠️ Penting — Harap diingat!</p>
+        <p style={{ color: '#78350f', fontSize: '12px', margin: '0 0 4px', lineHeight: '1.6' }}>• Harap ingat password Anda. Admin <strong>tidak dapat</strong> melihat password Anda.</p>
+        <p style={{ color: '#78350f', fontSize: '12px', margin: '0 0 4px', lineHeight: '1.6' }}>• Jika lupa password, hubungi admin untuk direset ke password default.</p>
+        <p style={{ color: '#78350f', fontSize: '12px', margin: 0, lineHeight: '1.6' }}>• Jangan bagikan password kepada siapapun.</p>
+      </div>
+    </div>
+  );
+
+  // ── LENGKAPI PROFIL ────────────────────────────────────────────────
+  if (page === 'lengkapiProfil') return (
+    <div style={S.page}>
+      <TopBar />
+      <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '16px', boxShadow: '0 8px 24px rgba(14,165,233,0.3)' }}>📋</div>
+      <p style={{ color: '#0284c7', fontSize: '20px', fontWeight: '900', marginBottom: '4px', textAlign: 'center' }}>Lengkapi Profil</p>
+      <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px', textAlign: 'center' }}>Isi data diri kamu agar profil lengkap</p>
+
+      {lengkapMsg && <div style={lengkapMsg.startsWith('✅') ? S.successBox : S.errBox}>{lengkapMsg}</div>}
+
+      <div style={{ ...S.card, border: '1px solid #bae6fd', width: '100%' }}>
+        <label style={S.label}>Jenis Kelamin *</label>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+          {['Laki-laki','Perempuan'].map(jk => (
+            <button key={jk} onClick={() => setLengkapForm(p => ({ ...p, jenisKelamin: jk }))}
+              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `2px solid ${lengkapForm.jenisKelamin === jk ? '#0284c7' : '#e2e8f0'}`, background: lengkapForm.jenisKelamin === jk ? '#eff6ff' : 'white', color: lengkapForm.jenisKelamin === jk ? '#0284c7' : '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+              {jk === 'Laki-laki' ? '👦 Laki-laki' : '👧 Perempuan'}
+            </button>
+          ))}
+        </div>
+
+        <label style={S.label}>Agama *</label>
+        <select style={S.select} value={lengkapForm.agama} onChange={e => setLengkapForm(p => ({ ...p, agama: e.target.value }))}>
+          {['Islam','Kristen','Katolik','Hindu','Buddha','Konghucu'].map(a => <option key={a}>{a}</option>)}
+        </select>
+
+        <label style={S.label}>Kewarganegaraan *</label>
+        <select style={S.select} value={lengkapForm.kewarganegaraan} onChange={e => setLengkapForm(p => ({ ...p, kewarganegaraan: e.target.value }))}>
+          <option value="WNI">🇮🇩 WNI (Warga Negara Indonesia)</option>
+          <option value="WNA">🌍 WNA (Warga Negara Asing)</option>
+        </select>
+
+        <label style={S.label}>Email Aktif *</label>
+        <input style={S.input} type="email" placeholder="email@gmail.com" value={lengkapForm.email} onChange={e => setLengkapForm(p => ({ ...p, email: e.target.value }))} />
+
+        <label style={S.label}>Nomor Telepon / HP *</label>
+        <input style={S.input} type="tel" placeholder="08xxxxxxxxxx" value={lengkapForm.telpon} onChange={e => setLengkapForm(p => ({ ...p, telpon: e.target.value }))} />
+      </div>
+
+      <button onClick={simpanLengkapProfil} disabled={lengkapLoading} style={{ width: '100%', padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: 'white', fontWeight: '700', fontSize: '15px', cursor: 'pointer', boxShadow: '0 4px 14px rgba(14,165,233,0.3)' }}>
+        {lengkapLoading ? '⏳ Menyimpan...' : '✅ Simpan & Mulai Belajar'}
+      </button>
+    </div>
+  );
 
   // fallback
   return <div style={S.page}><TopBar /><p style={{color:'#64748b'}}>Halaman tidak ditemukan</p></div>;
