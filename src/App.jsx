@@ -256,27 +256,28 @@ function App() {
   const goBack = () => {
     const stack = pageStack.current;
     const cur = stack[stack.length - 1];
-    // Hanya dashboard yang jadi tembok — tidak bisa back lebih jauh
-    // splash, gantiPasswordPertama, lengkapiProfil juga ditahan
     const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
+    // Selalu push state baru dulu agar Android tidak keluar app
+    window.history.pushState({ p: 'block' }, '', window.location.href);
     if (stopPages.includes(cur) || stack.length <= 1) {
-      // Push state baru agar buffer tidak habis
-      window.history.pushState({ p: 'hold' }, '', window.location.href);
+      // Di dashboard/splash: tahan, jangan kemana-mana
       return;
     }
     stack.pop();
     const prev = stack[stack.length - 1];
-    window.history.pushState({ p: prev }, '', window.location.href);
     setPage(prev);
   };
 
   useEffect(() => {
-    const onPop = (e) => { e.preventDefault(); goBack(); };
+    // Push 1 dummy state di awal sebagai buffer pertama
+    window.history.pushState({ p: 'init' }, '', window.location.href);
+
+    const onPop = (e) => {
+      // Selalu intercept — jangan biarkan browser handle sendiri
+      goBack();
+    };
+
     window.addEventListener('popstate', onPop);
-    // Seed 10 state buffer agar Android tidak langsung exit app
-    for (let i = 0; i < 10; i++) {
-      window.history.pushState({ p: 'buf' + i }, '', window.location.href);
-    }
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
