@@ -256,8 +256,11 @@ function App() {
   const goBack = () => {
     const stack = pageStack.current;
     const cur = stack[stack.length - 1];
-    // Halaman exit point: jangan pop, tahan di sini
-    if (cur === 'splash' || cur === 'dashboard' || cur === 'gantiPasswordPertama' || cur === 'lengkapiProfil' || cur === 'importGuru' || stack.length <= 1) {
+    // Hanya dashboard yang jadi tembok — tidak bisa back lebih jauh
+    // splash, gantiPasswordPertama, lengkapiProfil juga ditahan
+    const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
+    if (stopPages.includes(cur) || stack.length <= 1) {
+      // Push state baru agar buffer tidak habis
       window.history.pushState({ p: 'hold' }, '', window.location.href);
       return;
     }
@@ -270,10 +273,10 @@ function App() {
   useEffect(() => {
     const onPop = (e) => { e.preventDefault(); goBack(); };
     window.addEventListener('popstate', onPop);
-    // Seed 3 state buffer agar Android tidak langsung exit
-    window.history.pushState({ p: 'buf1' }, '', window.location.href);
-    window.history.pushState({ p: 'buf2' }, '', window.location.href);
-    window.history.pushState({ p: 'buf3' }, '', window.location.href);
+    // Seed 10 state buffer agar Android tidak langsung exit app
+    for (let i = 0; i < 10; i++) {
+      window.history.pushState({ p: 'buf' + i }, '', window.location.href);
+    }
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
@@ -4510,21 +4513,35 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
     return d.toLocaleString('id-ID', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
   };
 
+  const [searchPesan, setSearchPesan] = React.useState('');
+
   // Guru: pilih siswa dulu, lalu chat
   if (userRole === 'guru') {
     if (!targetSiswa) {
+      const filtered = siswaMapel.filter(s =>
+        s.nama?.toLowerCase().includes(searchPesan.toLowerCase()) ||
+        `${s.kelas}${s.jurusan}`.toLowerCase().includes(searchPesan.toLowerCase())
+      );
       return (
         <div style={S.page}>
           <TopBar />
-          <BackBtn to="dashboard" fn={() => goTo('dashboard')} />
-          <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Kirim Pesan</p>
-          <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih siswa untuk dikirim pesan</p>
+          <BackBtn to="dashboard" fn={() => setPage('dashboard')} />
+          <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Pesan</p>
+          <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px' }}>Cari siswa untuk dikirim pesan</p>
+          <input
+            style={{ ...S.input, marginBottom: '14px' }}
+            placeholder="🔍 Cari nama siswa atau kelas..."
+            value={searchPesan}
+            onChange={e => setSearchPesan(e.target.value)}
+          />
           {loading && <LoadingSpinner />}
-          {!loading && siswaMapel.length === 0 && <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}><p style={{ color: '#94a3b8' }}>Belum ada siswa terdaftar.</p></div>}
-          {siswaMapel.map((s, i) => (
+          {!loading && filtered.length === 0 && <div style={{ ...S.card, textAlign: 'center', padding: '32px' }}><p style={{ color: '#94a3b8' }}>{searchPesan ? 'Siswa tidak ditemukan.' : 'Belum ada siswa terdaftar.'}</p></div>}
+          {filtered.map((s, i) => (
             <div key={i} onClick={() => { setTargetSiswa(s); loadThread(userData.uid, s.uid); }}
               style={{ ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg,#06b6d4,#0891b2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>{s.avatar || '🎓'}</div>
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg,#06b6d4,#0891b2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0, overflow: 'hidden' }}>
+                {s.fotoUrl ? <img src={s.fotoUrl} alt={s.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (s.avatar || '🎓')}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{s.nama}</p>
                 <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>Kelas {s.kelas}{s.jurusan}</p>
@@ -4575,36 +4592,46 @@ function PesanPage({ userData, userRole, mapelList, S, TopBar, BackBtn, LoadingS
     );
   }
 
-  // Siswa: pilih guru (yang sudah pernah chat atau belum) lalu kirim/balas pesan
-  const kontakGuru = guruListSiswa.map(g => {
-    const pesanGuru = inboxList.filter(p => p.guruId === g.uid);
-    return { ...g, lastMsg: pesanGuru[0]?.isi || null, count: pesanGuru.length };
-  });
+  // Siswa: search + pilih guru
+  const [searchGuru, setSearchGuru] = React.useState('');
+  const filteredGuru = guruListSiswa.filter(g =>
+    g.nama?.toLowerCase().includes(searchGuru.toLowerCase()) ||
+    g.mapel?.toLowerCase().includes(searchGuru.toLowerCase()) ||
+    g.namaPanggilan?.toLowerCase().includes(searchGuru.toLowerCase())
+  );
 
   if (!targetGuru) {
     return (
       <div style={S.page}>
         <TopBar />
-        <BackBtn to="dashboard" fn={() => goTo('dashboard')} />
+        <BackBtn to="dashboard" fn={() => setPage('dashboard')} />
         <p style={{ color: '#0f172a', fontSize: '20px', fontWeight: '900', marginBottom: '4px' }}>💬 Pesan</p>
-        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>Pilih guru untuk mulai atau lanjut chat</p>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px' }}>Cari guru untuk dikirim pesan</p>
+        <input
+          style={{ ...S.input, marginBottom: '14px' }}
+          placeholder="🔍 Cari nama guru atau mapel..."
+          value={searchGuru}
+          onChange={e => setSearchGuru(e.target.value)}
+        />
         {loading && <LoadingSpinner />}
-        {!loading && kontakGuru.length === 0 && (
+        {!loading && filteredGuru.length === 0 && (
           <div style={{ ...S.card, textAlign: 'center', padding: '40px' }}>
             <div style={{ fontSize: '48px', marginBottom: '12px' }}>💬</div>
-            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Belum ada guru terdaftar.</p>
+            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>{searchGuru ? 'Guru tidak ditemukan.' : 'Belum ada guru terdaftar.'}</p>
           </div>
         )}
-        {kontakGuru.map((g, i) => (
+        {filteredGuru.map((g, i) => (
           <div key={i} onClick={() => { setTargetGuru(g); loadThread(g.uid, userData.uid); }}
             style={{ ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>{g.avatar || '👨‍🏫'}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.nama}</p>
-              <p style={{ color: '#4f46e5', fontSize: '12px', margin: '0 0 2px', fontWeight: '600' }}>{g.mapel}</p>
-              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.lastMsg || 'Mulai obrolan →'}</p>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0, overflow: 'hidden' }}>
+              {g.fotoUrl ? <img src={g.fotoUrl} alt={g.nama} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (g.avatar || '👨‍🏫')}
             </div>
-            {g.count > 0 && <div style={{ background: '#06b6d4', color: 'white', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{g.count}</div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: '700', fontSize: '14px', margin: '0 0 2px', color: '#0f172a' }}>{g.namaPanggilan || g.nama}</p>
+              <p style={{ color: '#dc2626', fontSize: '12px', margin: '0 0 2px', fontWeight: '600' }}>{g.mapel || '-'}</p>
+              <p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>{g.jabatan || 'Guru'}</p>
+            </div>
+            <span style={{ color: '#dc2626', fontSize: '18px' }}>›</span>
           </div>
         ))}
       </div>
