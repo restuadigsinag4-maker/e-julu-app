@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { auth, db } from './firebase';
+import { auth, db, firebaseConfig } from './firebase';
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword as createUser2,
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  updatePassword,
-  createUserWithEmailAndPassword
+  updatePassword
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, collection,
@@ -200,6 +201,8 @@ function App() {
   const [importGuruLoading, setImportGuruLoading] = useState(false);
   const [importGuruMsg, setImportGuruMsg] = useState('');
   const [importGuruPreview, setImportGuruPreview] = useState([]);
+  const [adminPassImport, setAdminPassImport] = useState('');
+  const [adminPassSiswaImport, setAdminPassSiswaImport] = useState('');
 
   const agamaList = ['Islam','Kristen Protestan','Katolik','Hindu','Buddha','Konghucu'];
   const jabatanList = ['Guru Mapel','Wali Kelas','Kepala Sekolah','Wakil Kepala Sekolah','Guru BK','Staf TU'];
@@ -1424,8 +1427,11 @@ function App() {
         const iMapel   = h.findIndex(x => x.includes('mapel') || x.includes('pelajaran') || x.includes('diampu'));
         if (iNama === -1) { setImportGuruMsg('❌ Kolom Nama wajib ada.'); return; }
         const rows = data.slice(1).map(cols => {
-          const nip      = iNIP     >= 0 ? String(cols[iNIP]     || '').trim() : '';
-          const nik      = iNIK     >= 0 ? String(cols[iNIK]     || '').trim() : '';
+          // NIK/NIP bisa tersimpan sebagai angka di Excel — konversi ke string, buang desimal
+          const nipRaw   = iNIP >= 0 && cols[iNIP] != null ? cols[iNIP] : '';
+          const nikRaw   = iNIK >= 0 && cols[iNIK] != null ? cols[iNIK] : '';
+          const nip      = nipRaw !== '' ? String(typeof nipRaw === 'number' ? Math.round(nipRaw) : nipRaw).trim() : '';
+          const nik      = nikRaw !== '' ? String(typeof nikRaw === 'number' ? Math.round(nikRaw) : nikRaw).trim() : '';
           const nama     = iNama    >= 0 ? String(cols[iNama]    || '').trim() : '';
           const panggil  = iPanggil >= 0 ? String(cols[iPanggil] || '').trim() : '';
           const jabatan  = iJabatan >= 0 ? String(cols[iJabatan] || '').trim() : 'Guru';
@@ -1451,36 +1457,42 @@ function App() {
   const mulaiImportGuru = async () => {
     const valid = importGuruPreview.filter(r => r.valid);
     if (!valid.length) { setImportGuruMsg('❌ Tidak ada data valid.'); return; }
-    if (!window.confirm(`Import ${valid.length} guru sekarang?`)) return;
     setImportGuruLoading(true);
-    // Pakai secondary Firebase app agar admin tidak ter-logout
-    const { firebaseConfig } = await import('./firebase');
-    const secApp = getApps().find(a => a.name === 'import-secondary') || initializeApp(firebaseConfig, 'import-secondary');
+    // Secondary app — buat akun tanpa logout admin
+    const secApp = getApps().find(a => a.name === 'sec') || initializeApp(firebaseConfig, 'sec');
     const secAuth = getAuth(secApp);
     let berhasil = 0, gagal = 0;
-    for (const g of valid) {
+    for (let i = 0; i < valid.length; i++) {
+      const g = valid[i];
+      setImportGuruMsg(`⏳ ${i + 1}/${valid.length}: ${g.nama}...`);
       try {
-        const cred = await createUser2(secAuth, g.email, 'ejulu123');
-        await setDoc(doc(db, 'users', cred.user.uid), {
-          uid: cred.user.uid, role: 'guru', status: 'approved',
-          nip: g.nip, nik: g.nik, nama: g.nama, namaPanggilan: g.namaPanggilan,
-          jabatan: g.jabatan, mapel: g.mapel, mapelList: g.mapelList,
-          email: g.email, telpon: '-', bio: '', agama: 'Islam',
+        const loginId = (g.nip || g.nik || '').replace(/\s/g, '');
+        if (!loginId) { gagal++; continue; }
+        const email = loginId + '@ejulu.sch.id';
+        const cred = await createUserWithEmailAndPassword(secAuth, email, 'ejulu123');
+        const uid = cred.user.uid;
+        await signOut(secAuth);
+        await setDoc(doc(db, 'users', uid), {
+          uid, role: 'guru', status: 'approved',
+          nip: g.nip || '', nik: g.nik || '', nama: g.nama,
+          namaPanggilan: g.namaPanggilan || '', jabatan: g.jabatan || 'Guru',
+          mapel: g.mapel || '', mapelList: g.mapelList || [],
+          email, telpon: '-', bio: '', agama: 'Islam',
           jenisKelamin: '', kewarganegaraan: 'WNI',
           passwordChanged: false, profileComplete: false,
           fotoUrl: '', avatar: '👨‍🏫', createdAt: new Date()
         });
-        if (g.nip) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nip), { email: g.email });
-        if (g.nik) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nik), { email: g.email });
-        await signOut(secAuth);
+        if (g.nip) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nip.replace(/\s/g, '')), { email });
+        if (g.nik) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nik.replace(/\s/g, '')), { email });
         berhasil++;
-      } catch (e) { gagal++; console.error('Import guru gagal:', g.nama, e.message); }
-      await new Promise(r => setTimeout(r, 300));
+      } catch (e) { gagal++; console.error(g.nama, e.message); }
+      await new Promise(r => setTimeout(r, 200));
     }
     setImportGuruPreview([]);
-    setImportGuruMsg(`✅ Import selesai! ${berhasil} berhasil, ${gagal} gagal.`);
+    setAdminPassImport('');
+    setImportGuruMsg(`✅ Selesai! ${berhasil} berhasil, ${gagal} gagal.`);
     setImportGuruLoading(false);
-    setTimeout(() => setImportGuruMsg(''), 8000);
+    setTimeout(() => setImportGuruMsg(''), 10000);
   };
 
   const downloadTemplateGuruExcel = async () => {
@@ -1490,13 +1502,16 @@ function App() {
     wb.creator = 'E-JULU';
     const ws = wb.addWorksheet('Template Import Guru', { views: [{ state: 'frozen', ySplit: 1 }] });
     ws.columns = [
-      { header: 'NIP',             key: 'nip',     width: 20 },
-      { header: 'NIK',             key: 'nik',     width: 18 },
+      { header: 'NIP',             key: 'nip',     width: 22 },
+      { header: 'NIK',             key: 'nik',     width: 20 },
       { header: 'Nama Lengkap',    key: 'nama',    width: 30 },
       { header: 'Nama Panggilan',  key: 'panggil', width: 18 },
       { header: 'Jabatan',         key: 'jabatan', width: 20 },
       { header: 'Mapel Diampu',    key: 'mapel',   width: 28 },
     ];
+    // Set format Text untuk kolom NIP (A) dan NIK (B) agar tidak berubah jadi notasi ilmiah
+    ws.getColumn('nip').numFmt = '@';
+    ws.getColumn('nik').numFmt = '@';
     const hRow = ws.getRow(1);
     hRow.height = 28;
     hRow.eachCell(cell => {
@@ -1510,6 +1525,16 @@ function App() {
       { nip:'',                  nik:'9876543210987654', nama:'Siti Rahayu, S.Pd',       panggil:'Bu Siti',  jabatan:'Guru Mapel', mapel:'Bahasa Indonesia' },
       { nip:'198505152010012002', nik:'1122334455667788', nama:'Ahmad Fauzan, S.T',       panggil:'Pak Ahmad',jabatan:'Guru Mapel', mapel:'Fisika' },
     ];
+    // Paksa NIP dan NIK di baris contoh sebagai string (bukan number)
+    contoh.forEach((_, idx) => {
+      const rowNum = idx + 2; // baris data mulai dari 2
+      ['nip','nik'].forEach(key => {
+        const col = key === 'nip' ? 1 : 2;
+        const cell = ws.getCell(rowNum, col);
+        cell.numFmt = '@';
+        if (cell.value) cell.value = String(cell.value);
+      });
+    });
     const border = { top:{style:'thin',color:{argb:'FFEDE9FE'}}, left:{style:'thin',color:{argb:'FFEDE9FE'}}, bottom:{style:'thin',color:{argb:'FFEDE9FE'}}, right:{style:'thin',color:{argb:'FFEDE9FE'}} };
     contoh.forEach((d, idx) => {
       const row = ws.addRow(d);
@@ -1670,38 +1695,42 @@ function App() {
     reader.readAsArrayBuffer(file);
   };
 
+
   const mulaiImport = async () => {
     const valid = importPreview.filter(r => r.valid);
     if (!valid.length) { setImportMsg('❌ Tidak ada baris data yang valid.'); return; }
-    if (!window.confirm(`Import ${valid.length} siswa sekarang? Proses ini tidak bisa dibatalkan.`)) return;
     setImportLoading(true);
-    // Pakai secondary Firebase app agar admin tidak ter-logout
-    const { firebaseConfig } = await import('./firebase');
-    const secApp = getApps().find(a => a.name === 'import-secondary') || initializeApp(firebaseConfig, 'import-secondary');
+    // Secondary app — buat akun tanpa logout admin
+    const secApp = getApps().find(a => a.name === 'sec') || initializeApp(firebaseConfig, 'sec');
     const secAuth = getAuth(secApp);
     let berhasil = 0, gagal = 0;
-    for (const s of valid) {
+    for (let i = 0; i < valid.length; i++) {
+      const s = valid[i];
+      setImportMsg(`⏳ ${i + 1}/${valid.length}: ${s.nama}...`);
       try {
-        const cred = await createUser2(secAuth, s.email, s.password || s.nisn);
-        await setDoc(doc(db, 'users', cred.user.uid), {
-          uid: cred.user.uid, role: 'siswa', status: 'approved',
-          nisn: s.nisn, nama: s.nama, email: s.email, kelas: s.kelas,
-          jurusan: s.jurusan, tglLahir: s.tglLahir, agama: 'Islam', telpon: '-',
+        const email = s.nisn.trim() + '@ejulu.sch.id';
+        const cred = await createUserWithEmailAndPassword(secAuth, email, 'ejulu123');
+        const uid = cred.user.uid;
+        await signOut(secAuth);
+        await setDoc(doc(db, 'users', uid), {
+          uid, role: 'siswa', status: 'approved',
+          nisn: s.nisn, nama: s.nama, email, kelas: s.kelas,
+          jurusan: s.jurusan, tglLahir: s.tglLahir || '', agama: 'Islam', telpon: '-',
           jenisKelamin: '', kewarganegaraan: 'WNI',
           passwordChanged: false, profileComplete: false,
           citaCita: '', hobby: '', bio: '', fotoUrl: '', avatar: '🎓',
           poinPG: 0, poinEssay: 0, poinModul: 0, totalPoin: 0, pelanggaran: 0, createdAt: new Date()
         });
-        await setDoc(doc(db, 'loginIndex', 'siswa_' + s.nisn), { email: s.email });
-        await signOut(secAuth);
+        await setDoc(doc(db, 'loginIndex', 'siswa_' + s.nisn.trim()), { email });
         berhasil++;
-      } catch (e) { gagal++; console.error('Import gagal:', s.nisn, e.message); }
-      await new Promise(r => setTimeout(r, 300));
+      } catch (e) { gagal++; console.error(s.nisn, e.message); }
+      await new Promise(r => setTimeout(r, 200));
     }
     setImportPreview([]);
-    setImportMsg(`✅ Import selesai! ${berhasil} berhasil, ${gagal} gagal. Siswa langsung bisa login.`);
+    setAdminPassSiswaImport('');
+    setImportMsg(`✅ Selesai! ${berhasil} berhasil, ${gagal} gagal.`);
     setImportLoading(false);
-    setTimeout(() => setImportMsg(''), 8000);
+    setTimeout(() => setImportMsg(''), 10000);
   };
 
   const loadExcelJS = () => new Promise((resolve, reject) => {
@@ -3975,8 +4004,12 @@ function App() {
             </div>
             {/* Footer aksi */}
             <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-              <button onClick={mulaiImport} disabled={importLoading || validCount === 0} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
-                {importLoading ? '⏳ Mengimport...' : `🚀 Import ${validCount} Siswa Sekarang`}
+              <div style={{ marginBottom: '10px' }}>
+                <p style={{ color: '#64748b', fontSize: '12px', fontWeight: '600', margin: '0 0 6px' }}>🔐 Password Admin</p>
+                <input type="password" placeholder="Masukkan password akun admin" value={adminPassSiswaImport} onChange={e => setAdminPassSiswaImport(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #86efac', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
+              </div>
+              <button onClick={mulaiImport} disabled={importLoading || validCount === 0 || !adminPassSiswaImport} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 && adminPassSiswaImport ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 && adminPassSiswaImport ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
+                {importLoading ? importMsg || '⏳ Mengimport...' : `🚀 Import ${validCount} Siswa Sekarang`}
               </button>
               <p style={{ color: '#94a3b8', fontSize: '11px', textAlign: 'center', margin: 0 }}>⚠️ Proses ini tidak bisa dibatalkan. Pastikan data sudah benar.</p>
             </div>
@@ -4224,8 +4257,12 @@ function App() {
               </table>
             </div>
             <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-              <button onClick={mulaiImportGuru} disabled={importGuruLoading || validCount === 0} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
-                {importGuruLoading ? '⏳ Mengimport...' : `🚀 Import ${validCount} Guru Sekarang`}
+              <div style={{ marginBottom: '10px' }}>
+                <p style={{ color: '#64748b', fontSize: '12px', fontWeight: '600', margin: '0 0 6px' }}>🔐 Password Admin</p>
+                <input type="password" placeholder="Masukkan password akun admin" value={adminPassImport} onChange={e => setAdminPassImport(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #a78bfa', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
+              </div>
+              <button onClick={mulaiImportGuru} disabled={importGuruLoading || validCount === 0 || !adminPassImport} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 && adminPassImport ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 && adminPassImport ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
+                {importGuruLoading ? importGuruMsg || '⏳ Mengimport...' : `🚀 Import ${validCount} Guru Sekarang`}
               </button>
               <p style={{ color: '#94a3b8', fontSize: '11px', textAlign: 'center', margin: 0 }}>⚠️ Proses ini tidak bisa dibatalkan.</p>
             </div>
