@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { auth, db, firebaseConfig } from './firebase';
+import { auth, db } from './firebase';
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
@@ -12,6 +12,16 @@ import {
   reauthenticateWithCredential,
   updatePassword
 } from 'firebase/auth';
+
+// Config untuk secondary app (buat akun tanpa logout admin)
+const firebaseConfig = {
+  apiKey: "AIzaSyBgVPUwmlcd8jp6pz8bPnRciOy9reTNax4",
+  authDomain: "e-julu.firebaseapp.com",
+  projectId: "e-julu",
+  storageBucket: "e-julu.firebasestorage.app",
+  messagingSenderId: "805811702740",
+  appId: "1:805811702740:web:242b1b59af34db850a2441"
+};
 import {
   doc, setDoc, getDoc, collection,
   getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy, limit
