@@ -249,8 +249,8 @@ function App() {
   const goTo = (newPage) => {
     const stack = pageStack.current;
     if (stack[stack.length - 1] !== newPage) stack.push(newPage);
-    // Ubah hash URL — Android baca ini sebagai halaman baru yang sesungguhnya
-    window.location.hash = newPage;
+    // pushState dengan path berbeda — Android baca sebagai halaman baru
+    window.history.pushState({ p: newPage }, '', '/' + newPage);
     setPage(newPage);
   };
 
@@ -259,35 +259,30 @@ function App() {
     const cur = stack[stack.length - 1];
     const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
     if (stopPages.includes(cur) || stack.length <= 1) {
-      // Di stop page: push hash baru agar Android tidak keluar
-      window.location.hash = cur + '_hold';
+      // Di stop page: push state baru agar Android tidak keluar
+      window.history.pushState({ p: cur }, '', '/' + cur);
       return;
     }
     stack.pop();
     const prev = stack[stack.length - 1];
-    // Set hash ke halaman sebelumnya
-    window.location.hash = prev;
+    window.history.pushState({ p: prev }, '', '/' + prev);
     setPage(prev);
   };
 
   useEffect(() => {
-    // Set hash awal
-    window.location.hash = 'splash';
+    window.history.replaceState({ p: 'splash' }, '', '/splash');
 
-    const onPop = (e) => {
-      e.preventDefault();
-      const hash = window.location.hash.replace('#', '').replace('_hold', '');
+    const onPop = () => {
       const stack = pageStack.current;
       const cur = stack[stack.length - 1];
       const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
       if (stopPages.includes(cur) || stack.length <= 1) {
-        // Tahan di sini
-        window.location.hash = cur + '_hold';
+        window.history.pushState({ p: cur }, '', '/' + cur);
         return;
       }
       stack.pop();
       const prev = stack[stack.length - 1];
-      window.location.hash = prev;
+      window.history.pushState({ p: prev }, '', '/' + prev);
       setPage(prev);
     };
 
