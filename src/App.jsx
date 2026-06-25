@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { auth, db } from './firebase';
-import {
-  createUserWithEmailAndPassword,
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword as createUser2,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  updatePassword
+  updatePassword,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, collection,
@@ -1452,10 +1453,14 @@ function App() {
     if (!valid.length) { setImportGuruMsg('❌ Tidak ada data valid.'); return; }
     if (!window.confirm(`Import ${valid.length} guru sekarang?`)) return;
     setImportGuruLoading(true);
+    // Pakai secondary Firebase app agar admin tidak ter-logout
+    const { firebaseConfig } = await import('./firebase');
+    const secApp = getApps().find(a => a.name === 'import-secondary') || initializeApp(firebaseConfig, 'import-secondary');
+    const secAuth = getAuth(secApp);
     let berhasil = 0, gagal = 0;
     for (const g of valid) {
       try {
-        const cred = await createUserWithEmailAndPassword(auth, g.email, 'ejulu123');
+        const cred = await createUser2(secAuth, g.email, 'ejulu123');
         await setDoc(doc(db, 'users', cred.user.uid), {
           uid: cred.user.uid, role: 'guru', status: 'approved',
           nip: g.nip, nik: g.nik, nama: g.nama, namaPanggilan: g.namaPanggilan,
@@ -1467,7 +1472,7 @@ function App() {
         });
         if (g.nip) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nip), { email: g.email });
         if (g.nik) await setDoc(doc(db, 'loginIndex', 'guru_' + g.nik), { email: g.email });
-        await signOut(auth);
+        await signOut(secAuth);
         berhasil++;
       } catch (e) { gagal++; console.error('Import guru gagal:', g.nama, e.message); }
       await new Promise(r => setTimeout(r, 300));
@@ -1670,10 +1675,14 @@ function App() {
     if (!valid.length) { setImportMsg('❌ Tidak ada baris data yang valid.'); return; }
     if (!window.confirm(`Import ${valid.length} siswa sekarang? Proses ini tidak bisa dibatalkan.`)) return;
     setImportLoading(true);
+    // Pakai secondary Firebase app agar admin tidak ter-logout
+    const { firebaseConfig } = await import('./firebase');
+    const secApp = getApps().find(a => a.name === 'import-secondary') || initializeApp(firebaseConfig, 'import-secondary');
+    const secAuth = getAuth(secApp);
     let berhasil = 0, gagal = 0;
     for (const s of valid) {
       try {
-        const cred = await createUserWithEmailAndPassword(auth, s.email, s.password || s.nisn);
+        const cred = await createUser2(secAuth, s.email, s.password || s.nisn);
         await setDoc(doc(db, 'users', cred.user.uid), {
           uid: cred.user.uid, role: 'siswa', status: 'approved',
           nisn: s.nisn, nama: s.nama, email: s.email, kelas: s.kelas,
@@ -1684,10 +1693,10 @@ function App() {
           poinPG: 0, poinEssay: 0, poinModul: 0, totalPoin: 0, pelanggaran: 0, createdAt: new Date()
         });
         await setDoc(doc(db, 'loginIndex', 'siswa_' + s.nisn), { email: s.email });
-        await signOut(auth);
+        await signOut(secAuth);
         berhasil++;
       } catch (e) { gagal++; console.error('Import gagal:', s.nisn, e.message); }
-      await new Promise(r => setTimeout(r, 300)); // jeda biar gak kena rate limit Firebase Auth
+      await new Promise(r => setTimeout(r, 300));
     }
     setImportPreview([]);
     setImportMsg(`✅ Import selesai! ${berhasil} berhasil, ${gagal} gagal. Siswa langsung bisa login.`);
