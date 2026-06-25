@@ -249,11 +249,8 @@ function App() {
   const goTo = (newPage) => {
     const stack = pageStack.current;
     if (stack[stack.length - 1] !== newPage) stack.push(newPage);
-    // Push 2 state per navigasi maju:
-    // - state pertama = penanda halaman
-    // - state kedua   = buffer, diserap goBack sehingga net = +1
-    window.history.pushState({ p: newPage }, '', window.location.href);
-    window.history.pushState({ p: newPage + '_buf' }, '', window.location.href);
+    // Ubah hash URL — Android baca ini sebagai halaman baru yang sesungguhnya
+    window.location.hash = newPage;
     setPage(newPage);
   };
 
@@ -262,24 +259,38 @@ function App() {
     const cur = stack[stack.length - 1];
     const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
     if (stopPages.includes(cur) || stack.length <= 1) {
-      // Sudah di titik akhir — push 2 buffer baru agar Android tidak keluar
-      window.history.pushState({ p: 'hold1' }, '', window.location.href);
-      window.history.pushState({ p: 'hold2' }, '', window.location.href);
+      // Di stop page: push hash baru agar Android tidak keluar
+      window.location.hash = cur + '_hold';
       return;
     }
     stack.pop();
     const prev = stack[stack.length - 1];
-    // Push 1 buffer untuk mengganti yang diserap
-    window.history.pushState({ p: prev + '_buf' }, '', window.location.href);
+    // Set hash ke halaman sebelumnya
+    window.location.hash = prev;
     setPage(prev);
   };
 
   useEffect(() => {
-    // Seed awal 5 buffer saat app pertama buka
-    for (let i = 0; i < 5; i++) {
-      window.history.pushState({ p: 'seed' + i }, '', window.location.href);
-    }
-    const onPop = () => goBack();
+    // Set hash awal
+    window.location.hash = 'splash';
+
+    const onPop = (e) => {
+      e.preventDefault();
+      const hash = window.location.hash.replace('#', '').replace('_hold', '');
+      const stack = pageStack.current;
+      const cur = stack[stack.length - 1];
+      const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
+      if (stopPages.includes(cur) || stack.length <= 1) {
+        // Tahan di sini
+        window.location.hash = cur + '_hold';
+        return;
+      }
+      stack.pop();
+      const prev = stack[stack.length - 1];
+      window.location.hash = prev;
+      setPage(prev);
+    };
+
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
