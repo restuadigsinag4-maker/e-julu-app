@@ -249,7 +249,11 @@ function App() {
   const goTo = (newPage) => {
     const stack = pageStack.current;
     if (stack[stack.length - 1] !== newPage) stack.push(newPage);
+    // Push 2 state per navigasi maju:
+    // - state pertama = penanda halaman
+    // - state kedua   = buffer, diserap goBack sehingga net = +1
     window.history.pushState({ p: newPage }, '', window.location.href);
+    window.history.pushState({ p: newPage + '_buf' }, '', window.location.href);
     setPage(newPage);
   };
 
@@ -257,26 +261,25 @@ function App() {
     const stack = pageStack.current;
     const cur = stack[stack.length - 1];
     const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
-    // Selalu push state baru dulu agar Android tidak keluar app
-    window.history.pushState({ p: 'block' }, '', window.location.href);
     if (stopPages.includes(cur) || stack.length <= 1) {
-      // Di dashboard/splash: tahan, jangan kemana-mana
+      // Sudah di titik akhir — push 2 buffer baru agar Android tidak keluar
+      window.history.pushState({ p: 'hold1' }, '', window.location.href);
+      window.history.pushState({ p: 'hold2' }, '', window.location.href);
       return;
     }
     stack.pop();
     const prev = stack[stack.length - 1];
+    // Push 1 buffer untuk mengganti yang diserap
+    window.history.pushState({ p: prev + '_buf' }, '', window.location.href);
     setPage(prev);
   };
 
   useEffect(() => {
-    // Push 1 dummy state di awal sebagai buffer pertama
-    window.history.pushState({ p: 'init' }, '', window.location.href);
-
-    const onPop = (e) => {
-      // Selalu intercept — jangan biarkan browser handle sendiri
-      goBack();
-    };
-
+    // Seed awal 5 buffer saat app pertama buka
+    for (let i = 0; i < 5; i++) {
+      window.history.pushState({ p: 'seed' + i }, '', window.location.href);
+    }
+    const onPop = () => goBack();
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
