@@ -1,0 +1,14 @@
+{
+  "appId": "com.ejulu.app",
+  "appName": "E-JULU",
+  "webDir": "dist",
+  "android": {
+    "handleApplicationNotifications": false,
+    "overrideUserAgent": "E-JULU Android"
+  },
+  "plugins": {
+    "App": {
+      "launchShowDuration": 0
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { auth, db } from './firebase';
+import { App as CapApp } from '@capacitor/app';
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
@@ -132,6 +133,7 @@ function App() {
   const [diskusiEditId, setDiskusiEditId] = useState(null);
   const [diskusiEditText, setDiskusiEditText] = useState('');
   const [diskusiActionId, setDiskusiActionId] = useState(null);
+  const [diskusiPoinId, setDiskusiPoinId] = useState(null);
   const longPressTimer = useRef(null);
 
   // Daftar Siswa & Guru
@@ -249,46 +251,35 @@ function App() {
   const goTo = (newPage) => {
     const stack = pageStack.current;
     if (stack[stack.length - 1] !== newPage) stack.push(newPage);
-    // pushState dengan path berbeda — Android baca sebagai halaman baru
-    window.history.pushState({ p: newPage }, '', '/' + newPage);
     setPage(newPage);
   };
 
-  const goBack = () => {
+  // Simpan goBack di ref agar Capacitor listener selalu pakai versi terbaru
+  const goBackRef = useRef(null);
+  goBackRef.current = () => {
     const stack = pageStack.current;
     const cur = stack[stack.length - 1];
     const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
-    if (stopPages.includes(cur) || stack.length <= 1) {
-      // Di stop page: push state baru agar Android tidak keluar
-      window.history.pushState({ p: cur }, '', '/' + cur);
-      return;
-    }
+    if (stopPages.includes(cur) || stack.length <= 1) return;
     stack.pop();
     const prev = stack[stack.length - 1];
-    window.history.pushState({ p: prev }, '', '/' + prev);
     setPage(prev);
   };
 
+  const goBack = () => goBackRef.current?.();
+
   useEffect(() => {
-    window.history.replaceState({ p: 'splash' }, '', '/splash');
+    // Capacitor: intercept tombol back Android di level native
+    // Pakai ref agar tidak stale closure
+    let handler;
+    CapApp.addListener('backButton', () => {
+      goBackRef.current?.();
+    }).then(h => { handler = h; });
 
-    const onPop = () => {
-      const stack = pageStack.current;
-      const cur = stack[stack.length - 1];
-      const stopPages = ['dashboard', 'adminDashboard', 'splash', 'gantiPasswordPertama', 'lengkapiProfil'];
-      if (stopPages.includes(cur) || stack.length <= 1) {
-        window.history.pushState({ p: cur }, '', '/' + cur);
-        return;
-      }
-      stack.pop();
-      const prev = stack[stack.length - 1];
-      window.history.pushState({ p: prev }, '', '/' + prev);
-      setPage(prev);
+    return () => {
+      if (handler) handler.remove();
     };
-
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, []); // dependency kosong — listener hanya dibuat sekali, ref yang update
 
   // ── Auth listener ─────────────────────────────────────────────
   useEffect(() => {
@@ -737,7 +728,7 @@ function App() {
     // totalPoin dijaga selalu sinkron — ini yang dipakai Leaderboard biar query-nya murah.
     if (p.poinPG !== undefined || p.poinEssay !== undefined || p.poinModul !== undefined) {
       const target = adminUsers.find(u => u.uid === uid) || selectedUser || {};
-      updateData.totalPoin = (updateData.poinPG ?? target.poinPG ?? 0) + (updateData.poinEssay ?? target.poinEssay ?? 0) + (updateData.poinModul ?? target.poinModul ?? 0);
+      updateData.totalPoin = (updateData.poinPG ?? target.poinPG ?? 0) + (updateData.poinEssay ?? target.poinEssay ?? 0) + (updateData.poinModul ?? target.poinModul ?? 0) + (target.poinDiskusi ?? 0);
     }
     await updateDoc(doc(db, 'users', uid), updateData);
     await catatAktivitas('EDIT_POIN', `Edit poin ${nama}`);
@@ -1128,7 +1119,7 @@ function App() {
       const q = query(collection(db, 'users'), where('role', '==', 'siswa'), where('status', '==', 'approved'), where('kelas', '==', tingkat), where('jurusan', '==', jurusan));
       const snap = await getDocs(q);
       const list = snap.docs.map(d => d.data());
-      list.sort((a, b) => { const pA = (a.poinPG||0)+(a.poinEssay||0)+(a.poinModul||0); const pB = (b.poinPG||0)+(b.poinEssay||0)+(b.poinModul||0); return pB - pA; });
+      list.sort((a, b) => { const pA = (a.poinPG||0)+(a.poinEssay||0)+(a.poinModul||0)+(a.poinDiskusi||0); const pB = (b.poinPG||0)+(b.poinEssay||0)+(b.poinModul||0)+(b.poinDiskusi||0); return pB - pA; });
       setDaftarSiswaList(list);
     } catch (e) { console.error(e); }
     setDaftarLoading(false);
@@ -1854,7 +1845,7 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  const hitungTotalPoin = (u) => (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0);
+  const hitungTotalPoin = (u) => (u.poinPG||0) + (u.poinEssay||0) + (u.poinModul||0) + (u.poinDiskusi||0);
 
   // Guru bisa pegang LEBIH dari satu mapel. Cek ke mapelList (array) dulu;
   // kalau akun lama belum punya mapelList, jatuhkan ke field `mapel` (tunggal).
@@ -1910,6 +1901,33 @@ function App() {
     await updateDoc(doc(db, 'diskusi', pesanId), { pesan: pesanBaru.trim(), diedit: true });
     setDiskusiList(prev => prev.map(d => d.id === pesanId ? { ...d, pesan: pesanBaru.trim(), diedit: true } : d));
     setDiskusiEditId(null); setDiskusiEditText(''); setDiskusiActionId(null);
+  };
+
+  const beriPoinDiskusi = async (pesanId, poin, pengirimId) => {
+    try {
+      // Simpan poin ke dokumen diskusi
+      await updateDoc(doc(db, 'diskusi', pesanId), { poinDiskusi: poin, poinDariId: userData.uid });
+      setDiskusiList(prev => prev.map(d => d.id === pesanId ? { ...d, poinDiskusi: poin } : d));
+
+      // Tambah poin ke user siswa
+      const userSnap = await getDoc(doc(db, 'users', pengirimId));
+      if (userSnap.exists()) {
+        const u = userSnap.data();
+        const poinDiskusiLama = u.poinDiskusi || 0;
+        // Kurangi poin lama dari pesan ini dulu kalau pernah diberi poin
+        const diskusiSnap = await getDoc(doc(db, 'diskusi', pesanId));
+        const poinSebelumnya = diskusiSnap.data()?.poinDiskusi || 0;
+        const deltaPoin = poin - poinSebelumnya;
+        const poinDiskusiBaru = Math.max(0, poinDiskusiLama + deltaPoin);
+        const totalBaru = (u.poinPG || 0) + (u.poinEssay || 0) + (u.poinModul || 0) + poinDiskusiBaru;
+        await updateDoc(doc(db, 'users', pengirimId), {
+          poinDiskusi: poinDiskusiBaru,
+          totalPoin: totalBaru
+        });
+      }
+      setDiskusiPoinId(null);
+      setDiskusiActionId(null);
+    } catch (e) { console.error('Gagal beri poin:', e.message); }
   };
 
   const handleLongPressStart = (d) => {
@@ -3118,7 +3136,7 @@ function App() {
           <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px', margin: 0 }}>Kelas {kelasLabel}</p>
         </div>
         <div style={{ ...S.card, padding: '10px 14px', marginBottom: '8px' }}>
-          <p style={{ color: '#64748b', fontSize: '11px', margin: 0 }}>💡 Tahan lama pesan untuk edit/hapus. Tekan 🔄 untuk refresh.</p>
+          <p style={{ color: '#64748b', fontSize: '11px', margin: 0 }}>💡 Ketuk ⋮ di pesan untuk edit/hapus/beri poin. Tekan 🔄 untuk refresh.</p>
         </div>
         <button onClick={() => loadDiskusi(selectedBab.id, kelasLabel)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', color: '#4f46e5', fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginBottom: '16px' }}>🔄 Refresh</button>
         {diskusiLoading && <LoadingSpinner />}
@@ -3131,17 +3149,28 @@ function App() {
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
           {diskusiList.map((d, i) => {
             const isMine = d.pengirimId === userData?.uid;
-            const isGuru = d.pengirimRole === 'guru';
+            const isGuruMsg = d.pengirimRole === 'guru';
             const isActionActive = diskusiActionId === d.id;
+            const isPoinActive = diskusiPoinId === d.id;
             const canAct = isMine || userRole === 'guru';
+            const canBeriPoin = userRole === 'guru' && !isGuruMsg && d.pengirimRole === 'siswa';
             return (
               <div key={d.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexDirection: isMine ? 'row-reverse' : 'row' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isGuru ? 'linear-gradient(135deg,#2563eb,#3b82f6)' : 'linear-gradient(135deg,#f59e0b,#d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>{isGuru ? '👨‍🏫' : '🎓'}</div>
-                  <span style={{ fontSize: '11px', color: isGuru ? '#2563eb' : '#d97706', fontWeight: '700' }}>{d.pengirimNama}{isGuru ? ' · Guru' : ''}</span>
+                {/* Header nama + waktu + titik 3 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexDirection: isMine ? 'row-reverse' : 'row', width: '100%' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isGuruMsg ? 'linear-gradient(135deg,#2563eb,#3b82f6)' : 'linear-gradient(135deg,#f59e0b,#d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }}>{isGuruMsg ? '👨‍🏫' : '🎓'}</div>
+                  <span style={{ fontSize: '11px', color: isGuruMsg ? '#2563eb' : '#d97706', fontWeight: '700' }}>{d.pengirimNama}{isGuruMsg ? ' · Guru' : ''}</span>
                   <span style={{ fontSize: '10px', color: '#94a3b8' }}>{formatWaktu(d.timestamp)}</span>
                   {d.diedit && <span style={{ fontSize: '9px', color: '#94a3b8' }}>· diedit</span>}
+                  {d.poinDiskusi && <span style={{ fontSize: '9px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '8px', fontWeight: '700' }}>+{d.poinDiskusi} poin</span>}
+                  {/* Titik 3 */}
+                  {canAct && (
+                    <button onClick={() => { setDiskusiActionId(isActionActive ? null : d.id); setDiskusiPoinId(null); setDiskusiEditId(null); }}
+                      style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#94a3b8', fontSize: '18px', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>⋮</button>
+                  )}
                 </div>
+
+                {/* Edit mode */}
                 {diskusiEditId === d.id ? (
                   <div style={{ maxWidth: '85%', width: '100%' }}>
                     <textarea style={{ ...S.input, height: '70px', resize: 'none', marginBottom: '6px' }} value={diskusiEditText} onChange={e => setDiskusiEditText(e.target.value)} autoFocus />
@@ -3152,18 +3181,34 @@ function App() {
                   </div>
                 ) : (
                   <div style={{ maxWidth: '82%' }}>
-                    <div onTouchStart={() => canAct && handleLongPressStart(d)} onTouchEnd={handleLongPressEnd} onMouseDown={() => canAct && handleLongPressStart(d)} onMouseUp={handleLongPressEnd} onMouseLeave={handleLongPressEnd}
-                      style={{ padding: '10px 14px', borderRadius: isMine ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: isMine ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : isGuru ? 'linear-gradient(135deg,#4f46e5,#4338ca)' : 'white', border: (!isMine && !isGuru) ? '1px solid #e2e8f0' : 'none', wordBreak: 'break-word', boxShadow: isMine ? '0 2px 8px rgba(37,99,235,0.25)' : isGuru ? '0 2px 8px rgba(79,70,229,0.2)' : '0 2px 8px rgba(0,0,0,0.06)', cursor: canAct ? 'pointer' : 'default', userSelect: 'none' }}>
-                      <p style={{ color: (isMine || isGuru) ? 'white' : '#0f172a', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{d.pesan}</p>
+                    <div style={{ padding: '10px 14px', borderRadius: isMine ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: isMine ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : isGuruMsg ? 'linear-gradient(135deg,#4f46e5,#4338ca)' : 'white', border: (!isMine && !isGuruMsg) ? '1px solid #e2e8f0' : 'none', wordBreak: 'break-word', boxShadow: isMine ? '0 2px 8px rgba(37,99,235,0.25)' : isGuruMsg ? '0 2px 8px rgba(79,70,229,0.2)' : '0 2px 8px rgba(0,0,0,0.06)' }}>
+                      <p style={{ color: (isMine || isGuruMsg) ? 'white' : '#0f172a', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{d.pesan}</p>
                     </div>
-                    {canAct && <p style={{ fontSize: '9px', color: '#94a3b8', margin: '3px 0 0', textAlign: isMine ? 'right' : 'left' }}>Tahan untuk edit{userRole === 'guru' && !isMine ? '/hapus' : ''}</p>}
                   </div>
                 )}
+
+                {/* Menu aksi (titik 3 dibuka) */}
                 {isActionActive && diskusiEditId !== d.id && (
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                    <button onClick={() => setDiskusiEditId(d.id)} style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#2563eb', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>✏️ Edit</button>
-                    {userRole === 'guru' && <button onClick={() => hapusDiskusi(d.id, d.pengirimId)} style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>🗑️ Hapus</button>}
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    <button onClick={() => { setDiskusiEditId(d.id); setDiskusiEditText(d.pesan); }} style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#2563eb', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>✏️ Edit</button>
+                    {userRole === 'guru' && !isMine && <button onClick={() => hapusDiskusi(d.id, d.pengirimId)} style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>🗑️ Hapus</button>}
+                    {canBeriPoin && <button onClick={() => { setDiskusiPoinId(isPoinActive ? null : d.id); setDiskusiActionId(null); }} style={{ padding: '7px 14px', borderRadius: '20px', border: 'none', background: '#f59e0b', color: 'white', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>⭐ Beri Poin</button>}
                     <button onClick={() => setDiskusiActionId(null)} style={{ padding: '7px 12px', borderRadius: '20px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: '12px', cursor: 'pointer' }}>✕</button>
+                  </div>
+                )}
+
+                {/* Panel beri poin (guru ke siswa) */}
+                {isPoinActive && (
+                  <div style={{ marginTop: '8px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '14px', padding: '12px 14px' }}>
+                    <p style={{ color: '#92400e', fontSize: '12px', fontWeight: '700', margin: '0 0 10px' }}>⭐ Beri Poin untuk {d.pengirimNama}</p>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                      {[1,2,3,4,5].map(p => (
+                        <button key={p} onClick={() => beriPoinDiskusi(d.id, p, d.pengirimId)}
+                          style={{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', background: d.poinDiskusi === p ? '#f59e0b' : '#fef3c7', color: d.poinDiskusi === p ? 'white' : '#d97706', fontWeight: '900', fontSize: '16px', cursor: 'pointer', boxShadow: d.poinDiskusi === p ? '0 2px 8px rgba(245,158,11,0.4)' : 'none' }}>{p}</button>
+                      ))}
+                    </div>
+                    <p style={{ color: '#94a3b8', fontSize: '10px', textAlign: 'center', margin: '8px 0 0' }}>Min 1 · Max 5 poin</p>
+                    <button onClick={() => setDiskusiPoinId(null)} style={{ width: '100%', marginTop: '8px', padding: '8px', borderRadius: '8px', border: '1px solid #fcd34d', background: 'white', color: '#92400e', fontSize: '12px', cursor: 'pointer' }}>Batal</button>
                   </div>
                 )}
               </div>
