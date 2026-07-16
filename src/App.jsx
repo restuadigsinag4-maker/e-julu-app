@@ -211,6 +211,11 @@ function App() {
   const [lengkapMsg, setLengkapMsg] = useState('');
   const [lengkapLoading, setLengkapLoading] = useState(false);
 
+  // State pesan guru (forum kelola)
+  const [guruMsg, setGuruMsg] = useState('');
+  const [guruKelolMsg, setGuruKelolMsg] = useState('');
+  const [forumMsg, setForumMsg] = useState('');
+
   // Import guru
   const [importGuruLoading, setImportGuruLoading] = useState(false);
   const [importGuruMsg, setImportGuruMsg] = useState('');
@@ -515,7 +520,7 @@ function App() {
       const poinModulBaru = hitungPoinModul();
       await updateDoc(doc(db, 'users', userData.uid), {
         poinPG: poinPGBaru, poinModul: poinModulBaru,
-        totalPoin: poinPGBaru + (userData.poinEssay || 0) + poinModulBaru
+        totalPoin: poinPGBaru + (userData.poinEssay || 0) + poinModulBaru + (userData.poinDiskusi || 0)
       });
     } catch (err) { console.error('Gagal simpan hasil quiz:', err); }
   };
@@ -526,7 +531,7 @@ function App() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       videoRef.current.srcObject = stream;
       setCameraActive(true);
-    } catch { alert('Kamera tidak bisa diakses.'); }
+    } catch { console.error('Kamera tidak bisa diakses.'); }
   };
   const ambilFotoSiswa = () => {
     const c = canvasRef.current, v = videoRef.current;
@@ -542,7 +547,7 @@ function App() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       videoGuruRef.current.srcObject = stream;
       setCameraGuruActive(true);
-    } catch { alert('Kamera tidak bisa diakses.'); }
+    } catch { console.error('Kamera tidak bisa diakses.'); }
   };
   const ambilFotoGuru = () => {
     const c = canvasGuruRef.current, v = videoGuruRef.current;
@@ -780,7 +785,7 @@ function App() {
       const siswaAktif = users.filter(u => u.role === 'siswa' && u.status === 'approved');
       const guruAktif = users.filter(u => u.role === 'guru' && u.status === 'approved');
       const pending = users.filter(u => u.status === 'pending');
-      const totalPoin = siswaAktif.reduce((acc, s) => acc + (s.poinPG||0) + (s.poinEssay||0) + (s.poinModul||0), 0);
+      const totalPoin = siswaAktif.reduce((acc, s) => acc + (s.poinPG||0) + (s.poinEssay||0) + (s.poinModul||0) + (s.poinDiskusi||0), 0);
       await catatAktivitas('LIHAT_STATISTIK', 'Dashboard statistik');
       setAdminStats({
         siswaAktif: siswaAktif.length, guruAktif: guruAktif.length, pending: pending.length,
@@ -908,7 +913,7 @@ function App() {
         // Siswa lama belum punya field totalPoin — tanpa ini, Leaderboard versi
         // hemat-baca gak akan nampilin mereka sama sekali. Hitung & isi sekarang.
         if (u.role === 'siswa' && u.totalPoin === undefined) {
-          const total = (u.poinPG || 0) + (u.poinEssay || 0) + (u.poinModul || 0);
+          const total = (u.poinPG || 0) + (u.poinEssay || 0) + (u.poinModul || 0) + (u.poinDiskusi || 0);
           await updateDoc(doc(db, 'users', d.id), { totalPoin: total });
           poinDiisi++;
         }
@@ -1962,7 +1967,7 @@ function App() {
     await updateDoc(doc(db, 'bab', selectedBab.id), { [field]: linkEdit[field] });
     setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, [field]: linkEdit[field] } : b));
     setSelectedBab(prev => ({ ...prev, [field]: linkEdit[field] }));
-    alert('Link tersimpan!');
+    setGuruMsg('✅ Link tersimpan!');
   };
 
   // #12 Simpan link file Google Drive per bab
@@ -1971,7 +1976,7 @@ function App() {
     await updateDoc(doc(db, 'bab', selectedBab.id), { fileDrive: linkEditDrive.trim() });
     setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, fileDrive: linkEditDrive.trim() } : b));
     setSelectedBab(prev => ({ ...prev, fileDrive: linkEditDrive.trim() }));
-    alert('Link file Google Drive tersimpan!');
+    setGuruMsg('✅ Link file Google Drive tersimpan!');
   };
 
   const hapusFileDrive = async () => {
@@ -2000,9 +2005,30 @@ function App() {
   const hapusSoal = async (soalId) => { await deleteDoc(doc(db, 'soal', soalId)); setQuizSoalList(prev => prev.filter(s => s.id !== soalId)); };
 
   const simpanNilaiEssay = async (hasilId, nilai, index) => {
-    await updateDoc(doc(db, 'hasilQuiz', hasilId), { nilaiEssay: Number(nilai) });
-    setHasilSiswa(prev => prev.map((h, i) => i === index ? { ...h, nilaiEssay: Number(nilai) } : h));
-    alert('Nilai essay tersimpan!');
+    const nilaiNum = Number(nilai);
+    const hasil = hasilSiswa[index];
+    await updateDoc(doc(db, 'hasilQuiz', hasilId), { nilaiEssay: nilaiNum });
+    setHasilSiswa(prev => prev.map((h, i) => i === index ? { ...h, nilaiEssay: nilaiNum } : h));
+    // Update poinEssay dan totalPoin siswa
+    if (hasil?.siswaId) {
+      try {
+        const userSnap = await getDoc(doc(db, 'users', hasil.siswaId));
+        if (userSnap.exists()) {
+          const u = userSnap.data();
+          // Essay 0-100 dikonversi ke poin: dibagi 5 (max 20 poin per bab)
+          const poinDariEssay = Math.round(nilaiNum / 5);
+          const poinEssayLama = u.poinEssay || 0;
+          const poinEssayBaru = poinEssayLama + poinDariEssay;
+          const totalBaru = (u.poinPG || 0) + poinEssayBaru + (u.poinModul || 0) + (u.poinDiskusi || 0);
+          await updateDoc(doc(db, 'users', hasil.siswaId), {
+            poinEssay: poinEssayBaru,
+            totalPoin: totalBaru
+          });
+        }
+      } catch (e) { console.error('Gagal update poin essay:', e.message); }
+    }
+    setGuruKelolMsg('✅ Nilai essay tersimpan!');
+    setTimeout(() => setGuruKelolMsg(''), 3000);
   };
 
 
@@ -2769,7 +2795,7 @@ function App() {
           const bisaAkses = userRole === 'siswa' || guruPunyaMapel(m.nama);
           return (
             <button key={m.id} onClick={() => {
-              if (!bisaAkses) { alert(`Kamu hanya bisa mengakses ${userData?.mapel}`); return; }
+              if (!bisaAkses) { setForumMsg('⚠️ Kamu hanya bisa mengakses mapel yang diampu.'); return; }
               setSelectedMapel(m);
               if (userRole === 'siswa') { loadBab(m.nama); setSelectedKelas({ tingkat: userData.kelas, jurusan: userData.jurusan }); goTo('forumBab'); }
               else { setGuruPilihTingkat(null); goTo('forumPilihKelas'); }
@@ -2823,6 +2849,7 @@ function App() {
     <div style={S.page}>
       <TopBar />
       <BackBtn to={userRole === 'guru' ? 'forumPilihKelas' : 'forum'} />
+      {forumMsg && <div style={S.errBox}>{forumMsg}</div>}
       <p style={{ color: '#d97706', fontSize: '20px', fontWeight: '900', marginBottom: '2px' }}>{selectedMapel?.icon} {selectedMapel?.nama}</p>
       <p style={{ color: '#4f46e5', fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>📚 Kelas {selectedKelas?.tingkat}{selectedKelas?.jurusan}</p>
       <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '12px' }}>Pilih Bab Pembelajaran</p>
@@ -2890,6 +2917,7 @@ function App() {
           {userRole === 'siswa' ? (selectedBab?.video ? <a href={selectedBab.video} target="_blank" rel="noreferrer" onClick={() => { if (!videoTimerRef.current) mulaiTimerVideo(); }} style={{ ...S.linkBtn, background: 'linear-gradient(135deg,#dc2626,#b91c1c)' }}><span>▶️</span> Tonton Video</a> : <p style={{ color: '#94a3b8', fontSize: '13px' }}>Belum ada video.</p>)
           : <div><input style={S.input} placeholder="Link YouTube..." value={linkEdit.video} onChange={e => setLinkEdit(p => ({ ...p, video: e.target.value }))} /><button onClick={() => simpanLinkBab('video')} style={{ background: '#16a34a', border: 'none', color: 'white', borderRadius: '6px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>💾 Simpan</button></div>}
         </div>
+        {guruMsg && <div style={guruMsg.startsWith('✅') ? S.successBox : S.errBox}>{guruMsg}</div>}
         {/* #12 File Materi Google Drive */}
         <div style={{ ...S.card, border: '1px solid #bbf7d0' }}>
           <p style={{ color: '#16a34a', fontWeight: 'bold', marginBottom: '10px', fontSize: '15px' }}>📁 File Materi (Google Drive)</p>
@@ -3079,7 +3107,8 @@ function App() {
       <TopBar />
       <BackBtn to="forumIsiBab" />
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
-        <p style={{ color: '#d97706', fontSize: '18px', fontWeight: '900', margin: 0 }}>Hasil Siswa</p>
+        {guruKelolMsg && <div style={S.successBox}>{guruKelolMsg}</div>}
+      <p style={{ color: '#d97706', fontSize: '18px', fontWeight: '900', margin: 0 }}>Hasil Siswa</p>
         {hasilSiswa.length > 0 && (
           <button onClick={exportNilaiGuruExcel} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
             📥 Excel
