@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { auth, db } from './firebase';
 import { App as CapApp } from '@capacitor/app';
 import { initializeApp, getApps } from 'firebase/app';
@@ -134,6 +135,7 @@ function App() {
   const [diskusiEditText, setDiskusiEditText] = useState('');
   const [diskusiActionId, setDiskusiActionId] = useState(null);
   const [diskusiPoinId, setDiskusiPoinId] = useState(null);
+  const [confirmDlg, setConfirmDlg] = useState(null);
   const longPressTimer = useRef(null);
 
   // Daftar Siswa & Guru
@@ -368,8 +370,9 @@ function App() {
           width: 430px !important;
           max-width: 430px !important;
           min-height: 80vh;
-          max-height: 88vh;
+          max-height: 92vh;
           overflow-y: auto !important;
+          -webkit-overflow-scrolling: touch;
           overflow-x: hidden !important;
           border-radius: 40px !important;
           box-shadow:
@@ -693,13 +696,14 @@ function App() {
   };
 
   const hapusUserRBAC = async (uid, nama) => {
-    if (!window.confirm('Yakin hapus?')) return;
-    await deleteDoc(doc(db, 'users', uid));
-    await catatAktivitas('DELETE_USER', `Menghapus: ${nama}`);
-    setAdminMsg('🗑️ User dihapus!');
-    setAdminUsers(prev => prev.filter(u => u.uid !== uid));
-    setSelectedUser(null);
-    setTimeout(() => setAdminMsg(''), 3000);
+    setConfirmDlg({ pesan: 'Yakin hapus akun ini?', onYes: async () => {
+      await deleteDoc(doc(db, 'users', uid));
+      await catatAktivitas('DELETE_USER', `Menghapus: ${nama}`);
+      setAdminMsg('🗑️ User dihapus!');
+      setAdminUsers(prev => prev.filter(u => u.uid !== uid));
+      setSelectedUser(null);
+      setTimeout(() => setAdminMsg(''), 3000);
+    }});
   };
 
   const resetPasswordRBAC = async (email) => {
@@ -816,12 +820,13 @@ function App() {
   };
 
   const hapusTahunAjaran = async (id, tahun) => {
-    if (!window.confirm('Hapus?')) return;
-    await deleteDoc(doc(db, 'tahunAjaran', id));
-    await catatAktivitas('HAPUS_TAHUN_AJARAN', tahun);
-    setAdminMsg('🗑️ Dihapus!');
-    loadTahunAjaran();
-    setTimeout(() => setAdminMsg(''), 3000);
+    setConfirmDlg({ pesan: 'Hapus item ini?', onYes: async () => {
+      await deleteDoc(doc(db, 'tahunAjaran', id));
+      await catatAktivitas('HAPUS_TAHUN_AJARAN', tahun);
+      setAdminMsg('🗑️ Dihapus!');
+      loadTahunAjaran();
+      setTimeout(() => setAdminMsg(''), 3000);
+    }});
   };
 
   const setAktifTahunAjaran = async (id, tahun) => {
@@ -858,19 +863,20 @@ function App() {
   };
 
   const hapusKelas = async (id, label) => {
-    if (!window.confirm(`Hapus kelas ${label}?`)) return;
-    await deleteDoc(doc(db, 'masterKelas', id));
-    await catatAktivitas('HAPUS_KELAS', label);
-    setAdminMsg('🗑️ Dihapus!');
-    loadKelas();
-    setTimeout(() => setAdminMsg(''), 3000);
+    setConfirmDlg({ pesan: `Hapus kelas ${label}?`, onYes: async () => {
+      await deleteDoc(doc(db, 'masterKelas', id));
+      await catatAktivitas('HAPUS_KELAS', label);
+      setAdminMsg('🗑️ Dihapus!');
+      loadKelas();
+      setTimeout(() => setAdminMsg(''), 3000);
+    }});
   };
 
   // Sekali-jalan: bikinkan entri loginIndex (NISN/NIP/NIK → email) untuk akun
   // yang sudah terdaftar SEBELUM fitur login yang lebih aman ini dipasang.
   // Aman dijalankan berkali-kali (skip yang sudah ada).
   const sinkronkanLoginIndex = async () => {
-    if (!window.confirm('Sinkronkan akun lama (login, mapel guru, & poin leaderboard)?')) return;
+    setConfirmDlg({ pesan: 'Sinkronkan akun lama?', onYes: async () => {
     setMigrasiLoading(true);
     let dibuat = 0, dilewati = 0, mapelDiisi = 0, poinDiisi = 0;
     try {
@@ -912,6 +918,7 @@ function App() {
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setMigrasiLoading(false);
     setTimeout(() => setAdminMsg(''), 5000);
+    }});
   };
 
   const loadMapelAdmin = async () => {
@@ -1006,8 +1013,8 @@ function App() {
 
   const hapusMapelItem = async (idx) => {
     const item = mapelEditList[idx];
-    if (!window.confirm(`Hapus mapel "${item.nama}"? Materi/bab yang sudah ada di mapel ini TIDAK ikut terhapus otomatis.`)) return;
-    try {
+    setConfirmDlg({ pesan: `Hapus mapel "${item.nama}"?`, onYes: async () => {
+      try {
       await deleteDoc(doc(db, 'masterMapel', item.id));
       await catatAktivitas('HAPUS_MAPEL', item.nama);
       if (item.guruId) await hitungUlangMapelGuru(item.guruId);
@@ -1015,6 +1022,7 @@ function App() {
       setAdminMsg('🗑️ Mapel dihapus!');
     } catch (e) { setAdminMsg('❌ Gagal: ' + e.message); }
     setTimeout(() => setAdminMsg(''), 2000);
+    }});
   };
 
   const simpanEditProfil = async () => {
@@ -1176,9 +1184,10 @@ function App() {
   };
 
   const hapusPengumuman = async (id) => {
-    if (!window.confirm('Hapus pengumuman ini?')) return;
-    await deleteDoc(doc(db, 'pengumuman', id));
-    setPengumumanList(prev => prev.filter(p => p.id !== id));
+    setConfirmDlg({ pesan: 'Hapus pengumuman ini?', onYes: async () => {
+      await deleteDoc(doc(db, 'pengumuman', id));
+      setPengumumanList(prev => prev.filter(p => p.id !== id));
+    }});
   };
 
   // ── Rekap Nilai Siswa ─────────────────────────────────────────
@@ -1405,10 +1414,11 @@ function App() {
   };
 
   const hapusKalender = async (id, judul) => {
-    if (!window.confirm(`Hapus "${judul}"?`)) return;
-    await deleteDoc(doc(db, 'kalender', id));
-    await catatAktivitas('HAPUS_KALENDER', judul);
-    setKalenderList(prev => prev.filter(k => k.id !== id));
+    setConfirmDlg({ pesan: `Hapus kegiatan "${judul}"?`, onYes: async () => {
+      await deleteDoc(doc(db, 'kalender', id));
+      await catatAktivitas('HAPUS_KALENDER', judul);
+      setKalenderList(prev => prev.filter(k => k.id !== id));
+    }});
   };
 
   // ── Import massal guru ───────────────────────────────────────────
@@ -1503,7 +1513,6 @@ function App() {
       await new Promise(r => setTimeout(r, 200));
     }
     setImportGuruPreview([]);
-    setAdminPassImport('');
     setImportGuruMsg(`✅ Selesai! ${berhasil} berhasil, ${gagal} gagal.`);
     setImportGuruLoading(false);
     setTimeout(() => setImportGuruMsg(''), 10000);
@@ -1741,7 +1750,6 @@ function App() {
       await new Promise(r => setTimeout(r, 200));
     }
     setImportPreview([]);
-    setAdminPassSiswaImport('');
     setImportMsg(`✅ Selesai! ${berhasil} berhasil, ${gagal} gagal.`);
     setImportLoading(false);
     setTimeout(() => setImportMsg(''), 10000);
@@ -1905,25 +1913,20 @@ function App() {
 
   const beriPoinDiskusi = async (pesanId, poin, pengirimId) => {
     try {
-      // Simpan poin ke dokumen diskusi
+      // Ambil poin sebelumnya dari state SEBELUM update Firestore (fix race condition)
+      const pesanLama = diskusiList.find(d => d.id === pesanId);
+      const poinSebelumnya = pesanLama?.poinDiskusi || 0;
+      // Update dokumen diskusi
       await updateDoc(doc(db, 'diskusi', pesanId), { poinDiskusi: poin, poinDariId: userData.uid });
       setDiskusiList(prev => prev.map(d => d.id === pesanId ? { ...d, poinDiskusi: poin } : d));
-
-      // Tambah poin ke user siswa
+      // Hitung delta dan update poin siswa
       const userSnap = await getDoc(doc(db, 'users', pengirimId));
       if (userSnap.exists()) {
         const u = userSnap.data();
-        const poinDiskusiLama = u.poinDiskusi || 0;
-        // Kurangi poin lama dari pesan ini dulu kalau pernah diberi poin
-        const diskusiSnap = await getDoc(doc(db, 'diskusi', pesanId));
-        const poinSebelumnya = diskusiSnap.data()?.poinDiskusi || 0;
         const deltaPoin = poin - poinSebelumnya;
-        const poinDiskusiBaru = Math.max(0, poinDiskusiLama + deltaPoin);
+        const poinDiskusiBaru = Math.max(0, (u.poinDiskusi || 0) + deltaPoin);
         const totalBaru = (u.poinPG || 0) + (u.poinEssay || 0) + (u.poinModul || 0) + poinDiskusiBaru;
-        await updateDoc(doc(db, 'users', pengirimId), {
-          poinDiskusi: poinDiskusiBaru,
-          totalPoin: totalBaru
-        });
+        await updateDoc(doc(db, 'users', pengirimId), { poinDiskusi: poinDiskusiBaru, totalPoin: totalBaru });
       }
       setDiskusiPoinId(null);
       setDiskusiActionId(null);
@@ -1972,11 +1975,12 @@ function App() {
   };
 
   const hapusFileDrive = async () => {
-    if (!window.confirm('Hapus link file Google Drive dari bab ini?')) return;
-    await updateDoc(doc(db, 'bab', selectedBab.id), { fileDrive: '' });
-    setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, fileDrive: '' } : b));
-    setSelectedBab(prev => ({ ...prev, fileDrive: '' }));
-    setLinkEditDrive('');
+    setConfirmDlg({ pesan: 'Hapus link file Google Drive?', onYes: async () => {
+      await updateDoc(doc(db, 'bab', selectedBab.id), { fileDrive: '' });
+      setBabList(prev => prev.map(b => b.id === selectedBab.id ? { ...b, fileDrive: '' } : b));
+      setSelectedBab(prev => ({ ...prev, fileDrive: '' }));
+      setLinkEditDrive('');
+    }});
   };
 
   const tambahSoalPG = async () => {
@@ -2069,9 +2073,29 @@ function App() {
     </div>
   );
 
+  // Custom confirm dialog — ganti window.confirm yang tidak jalan di APK Android
+  // Pakai createPortal agar tampil di atas semua halaman tanpa ubah setiap return
+  const ConfirmDialog = () => {
+    if (!confirmDlg) return null;
+    return createPortal(
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '20px' }}>
+        <div style={{ background: 'white', borderRadius: '20px', padding: '24px 20px', maxWidth: '340px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <p style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px', textAlign: 'center', lineHeight: '1.6' }}>{confirmDlg.pesan}</p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => setConfirmDlg(null)} style={{ flex: 1, padding: '13px', borderRadius: '12px', border: '1.5px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>Batal</button>
+            <button onClick={() => { const fn = confirmDlg.onYes; setConfirmDlg(null); fn(); }} style={{ flex: 1, padding: '13px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>✅ Ya</button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
   if (!authReady) return (
-    <div style={{ ...S.page, justifyContent: 'center' }}><TopBar /><LoadingSpinner /></div>
+    <div style={{ ...S.page, justifyContent: 'center' }}><TopBar /><LoadingSpinner /><ConfirmDialog /></div>
   );
+
+
 
 
   // ══════════════════════════════════════════════════════════════════
@@ -3936,9 +3960,9 @@ function App() {
       {/* Ringkasan poin */}
       <div style={{ width: '100%', background: 'linear-gradient(135deg,#10b981,#059669)', borderRadius: '16px', padding: '18px', marginBottom: '16px', boxShadow: '0 6px 20px rgba(16,185,129,0.3)' }}>
         <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', fontWeight: '700', letterSpacing: '1.5px', margin: '0 0 8px' }}>TOTAL POIN KAMU</p>
-        <p style={{ color: 'white', fontSize: '36px', fontWeight: '900', margin: '0 0 12px' }}>{(userData?.poinPG||0)+(userData?.poinEssay||0)+(userData?.poinModul||0)} <span style={{ fontSize: '14px', opacity: 0.8 }}>poin</span></p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-          {[{ label: 'Quiz PG', val: userData?.poinPG||0 }, { label: 'Essay', val: userData?.poinEssay||0 }, { label: 'Modul', val: userData?.poinModul||0 }].map((s, i) => (
+        <p style={{ color: 'white', fontSize: '36px', fontWeight: '900', margin: '0 0 12px' }}>{(userData?.poinPG||0)+(userData?.poinEssay||0)+(userData?.poinModul||0)+(userData?.poinDiskusi||0)} <span style={{ fontSize: '14px', opacity: 0.8 }}>poin</span></p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+          {[{ label: 'Quiz PG', val: userData?.poinPG||0 }, { label: 'Essay', val: userData?.poinEssay||0 }, { label: 'Modul', val: userData?.poinModul||0 }, { label: 'Diskusi', val: userData?.poinDiskusi||0 }].map((s, i) => (
             <div key={i} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '8px', textAlign: 'center' }}>
               <p style={{ color: 'white', fontWeight: '900', fontSize: '18px', margin: '0 0 2px' }}>{s.val}</p>
               <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '10px', margin: 0 }}>{s.label}</p>
@@ -4072,11 +4096,7 @@ function App() {
             </div>
             {/* Footer aksi */}
             <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-              <div style={{ marginBottom: '10px' }}>
-                <p style={{ color: '#64748b', fontSize: '12px', fontWeight: '600', margin: '0 0 6px' }}>🔐 Password Admin</p>
-                <input type="password" placeholder="Masukkan password akun admin" value={adminPassSiswaImport} onChange={e => setAdminPassSiswaImport(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #86efac', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
-              </div>
-              <button onClick={mulaiImport} disabled={importLoading || validCount === 0 || !adminPassSiswaImport} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 && adminPassSiswaImport ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 && adminPassSiswaImport ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
+              <button onClick={mulaiImport} disabled={importLoading || validCount === 0} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
                 {importLoading ? importMsg || '⏳ Mengimport...' : `🚀 Import ${validCount} Siswa Sekarang`}
               </button>
               <p style={{ color: '#94a3b8', fontSize: '11px', textAlign: 'center', margin: 0 }}>⚠️ Proses ini tidak bisa dibatalkan. Pastikan data sudah benar.</p>
@@ -4325,11 +4345,7 @@ function App() {
               </table>
             </div>
             <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-              <div style={{ marginBottom: '10px' }}>
-                <p style={{ color: '#64748b', fontSize: '12px', fontWeight: '600', margin: '0 0 6px' }}>🔐 Password Admin</p>
-                <input type="password" placeholder="Masukkan password akun admin" value={adminPassImport} onChange={e => setAdminPassImport(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #a78bfa', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
-              </div>
-              <button onClick={mulaiImportGuru} disabled={importGuruLoading || validCount === 0 || !adminPassImport} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 && adminPassImport ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 && adminPassImport ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
+              <button onClick={mulaiImportGuru} disabled={importGuruLoading || validCount === 0} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: validCount > 0 ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : '#94a3b8', color: 'white', fontWeight: '700', fontSize: '14px', cursor: validCount > 0 ? 'pointer' : 'not-allowed', marginBottom: '8px' }}>
                 {importGuruLoading ? importGuruMsg || '⏳ Mengimport...' : `🚀 Import ${validCount} Guru Sekarang`}
               </button>
               <p style={{ color: '#94a3b8', fontSize: '11px', textAlign: 'center', margin: 0 }}>⚠️ Proses ini tidak bisa dibatalkan.</p>
